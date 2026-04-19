@@ -113,3 +113,141 @@ Xiaoye Agent 基于 LangGraph 实现了 **Adaptive Self-RAG (Plan-and-Execute)**
 | SQL Agent | ❌ 缺失 | 新增 SQL Agent Tool |
 | 会话持久化 | ❌ 缺失 | 新增 SqliteSaver |
 | 权限审查 | ❌ 缺失 | 新增 Permission Node |
+
+## 2026-04-14 M4-A 冲刺代码交付（工具链渐进式披露升级与工程热修复）
+
+### 一、 架构目标达成 (ToolSearchTool 渐进式披露)
+
+本次迭代彻底重构了工具暴露机制，解决了由 LLM 上下文衰减导致的“关键词无法匹配工具”问题，正式移植了 Claude Code 的 **ToolSearchTool（渐进式披露）** 设计模式。
+
+#### 核心变更：
+1. **`ToolSearchEngine` 倒排检索索引 (`src/agent/tool_search.py`)**
+   - 实现内存级倒排索引和评分器，支持基于预定义 `search_hint` / `category` 的精确选取和模糊检索。
+2. **具象化安全隔离 (`src/agent/tools.py`)**
+   - 不再向 LangGraph 粗暴传递全量 Tool，所有工具现在都挂载了 `ToolMetadata` 并拥有 `should_defer=True` (延迟加载) 属性。大模型初始只能看见"文本检索"和"工具查询"。
+3. **环境解耦 (`skill_loader.py`)**
+   - 移除了所有老旧的硬编码字符串匹配（"计算", "文献"），不再越俎代庖去推测大模型需要什么工具，而是把拉取工具的主动权还给 Agent 本身。
+4. **全量引擎适配 (`graph.py`)**
+   - 对齐了 LangGraph `@tool` 绑定的边界条件：`ResearcherNode` (LLM 端) 虽然只被动态绑定基础工具链，但底层的 `ToolNode` (执行引擎端) 被正确赋予了 `ALL_TOOLS` 权限全集，严丝合缝消除了节点映射异常。
+
+### 二、 工程可用性修复 (Hotfixes)
+
+1. **API 模块断链修复**：排除了由 M1-M3 重构带来的调用遗留问题：
+   - 彻底移除了废弃的 `create_metallurgy_agent` 路由僵尸调用，对接为现代化的 `create_worker_graph` 事件流。
+   - 订正了 Marker-PDF 提取器在 debug 路由下的拼写错误（`split_markdown_into_chunk_documents`）。
+2. **底层环境补齐**：使用了正确的虚拟环境 `env_xiaoye`，并且打补丁安装了 `jupyter_client` 与 `python-multipart` 依赖，确保 `uvicorn main:app` 后端网关一次性启动成功无报错。
+
+## 下一步计划：M4-B 子冲刺前瞻 (用户决议流)
+目前 Worker 基础设施均已贯通，接下来的 B 阶段我们可以向前端/安全层面倾斜，当前已准备好两条路径待命：
+1. **M4-B1**: `Jupyter Sandbox` 物理沙盒隔离强化 (防范生成恶意破坏性探针脚本)
+2. **M4-B2**: Human-in-the-Loop (`SuspendTask` 交互中断求问体系，处理复杂二义性任务时的上行确认过程)
+
+---
+
+## 2026-04-19 Fork 更新：LangGraph 1.x 兼容性修复
+
+### 一、问题背景
+
+LangGraph 1.x 与 LangChain `@tool` 装饰器存在 API 不兼容，导致：
+
+```
+TypeError: unhashable type: 'StructuredTool'
+```
+
+具体报错位置：
+- `skill_loader.py:35` — `set(tools_to_load)` 无法哈希 StructuredTool
+- `graph.py:121` — `ToolNode(ALL_TOOLS)` 工具绑定失败
+- LLM API 调用时报错：`[] is too short - 'tools'`
+
+### 二、修复方案（方案 C：StructuredTool 包装）
+
+#### 2.1 核心修改文件
+
+| 文件 | 改动内容 | 状态 |
+|------|---------|------|
+| `src/agent/tools.py` | `@tool` → `StructuredTool.from_function()` | ✅ |
+| `src/agent/skill_loader.py` | 函数→工具映射修复 | ✅ |
+| `src/api/debug_routes.py` | 错误处理改进 | ✅ |
+
+#### 2.2 Pydantic 输入模型（tools.py 新增）
+
+```python
+class SearchTextInput(BaseModel):
+    query: str = Field(description="Search query text")
+    top_k: int = Field(default=3)
+
+class GraphRelationsInput(BaseModel):
+    entity: str = Field(description="Metallurgy entity name")
+
+class ImpactPathInput(BaseModel):
+    entity: str = Field(description="Entity to trace")
+
+class PythonCodeInput(BaseModel):
+    code: str = Field(description="Python code")
+
+class SearchToolsInput(BaseModel):
+    query: str = Field(description="Tool search query")
+    max_results: int = Field(default=5)
+```
+
+#### 2.3 工具包装示例（tools.py）
+
+```python
+# 修改前（@tool 装饰器）
+@tool
+def search_metallurgy_text(query: str, top_k: int = 3) -> str:
+    ...
+
+# 修改后（StructuredTool）
+def search_metallurgy_text(query: str, top_k: int = 3) -> str:
+    ...
+
+TEXT_TOOLS = [
+    StructuredTool.from_function(
+        func=search_metallurgy_text,
+        name="search_metallurgy_text",
+        description="Search for chunked texts...",
+        args_schema=SearchTextInput
+    )
+]
+```
+
+#### 2.4 工具映射修复（skill_loader.py）
+
+```python
+def probe_environment(self, task_description: str):
+    tools_to_load = get_tools_for_step(task_description)
+    
+    tool_map = {t.name: t for t in ALL_TOOLS}  # 建立 name→Tool 映射
+    
+    result = []
+    for item in tools_to_load:
+        if callable(item) and hasattr(item, '__name__'):
+            for t in ALL_TOOLS:
+                if t.func == item:  # 匹配函数
+                    result.append(t)
+        elif hasattr(item, 'name'):
+            result.append(item)
+    return result
+```
+
+### 三、验证结果
+
+| 测试项 | 状态 | 说明 |
+|-------|------|------|
+| ToolNode 创建 | ✅ | 5个工具加载成功 |
+| 工具加载 | ✅ | 2个核心工具 (search_metallurgy_text, search_available_tools) |
+| upload_pdf | ✅ | 200 OK |
+| fork_agent | ✅ | 200 OK |
+
+### 四、分支与备份
+
+- **工作分支**: `langgraph-fix`
+- **备份文件**: `src/agent/tools.py.backup`
+- **合并命令**: `git merge langgraph-fix`
+
+### 五、后续建议
+
+1. **长期**：添加完整的 LangGraph 流式测试
+2. **长期**：ES 索引创建 + PDF 导入 pipeline
+3. **依赖**：监控 LangChain/LangGraph 版本兼容性
