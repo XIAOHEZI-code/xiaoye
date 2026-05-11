@@ -76,7 +76,6 @@ def create_worker_graph():
         relevant_tools = tool_loader.probe_environment(task_description)
         dynamic_llm = llm.bind_tools(relevant_tools)
         
-        from langchain_core.messages import SystemMessage, HumanMessage
         # 确保以 HumanMessage 结尾，避免大模型 API 报错
         msgs_to_send = [SystemMessage(content=sys_prompt)] + state["messages"][1:] + [HumanMessage(content=user_prompt)]
         
@@ -158,7 +157,6 @@ def create_worker_graph():
         updates = {"step_satisfied": eval_obj.is_satisfied, "loop_count": current_loop}
         
         if not eval_obj.is_satisfied:
-            from langchain_core.messages import HumanMessage
             updates["messages"] = [HumanMessage(content=f"EVALUATOR_FEEDBACK (loop {current_loop}/{MAX_REACT_LOOPS}): {eval_obj.feedback}")]
             
         return updates
