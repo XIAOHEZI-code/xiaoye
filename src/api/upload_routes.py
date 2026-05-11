@@ -140,3 +140,14 @@ async def serve_pdf(doc_id: str, db: Session = Depends(get_db_session)):
         media_type="application/pdf",
         filename=doc.filename,
     )
+
+@router.get("/images")
+async def serve_local_image(path: str):
+    """
+    提供本地绝对路径图片的访问，用于展示 Marker 提取出来的图表
+    """
+    from fastapi.responses import FileResponse
+    import os
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="图片不存在")
+    return FileResponse(path)

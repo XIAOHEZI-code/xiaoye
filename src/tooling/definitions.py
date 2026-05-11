@@ -147,7 +147,13 @@ def search_metallurgy_text(query: str, top_k: int = 3) -> str:
     formatted = []
     for r in results:
         citation = r.to_citation_str()
-        formatted.append(f"Doc: {r.doc_id} {citation} (Type: {r.source_type})\nContent: {r.text_content}")
+        content = f"Doc: {r.doc_id} {citation} (Type: {r.source_type})\nContent: {r.text_content}"
+        if r.image_uri:
+            import urllib.parse
+            encoded_path = urllib.parse.quote(r.image_uri)
+            image_md = f"![{r.source_type}图表](http://127.0.0.1:8000/api/v1/images?path={encoded_path})"
+            content += f"\nImage: {image_md}"
+        formatted.append(content)
 
     # ── Side-effect: 推送检索源信息到前端 ────────────────────────────
     # 无论谁调用此 tool（Agent / chat_worker），都会自动通知前端展示命中的文献
