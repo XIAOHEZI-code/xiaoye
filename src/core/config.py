@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: str = "xiaoye_neo4j"
 
+    # File Storage
+    UPLOAD_DIR: str = "data/storage"
+
     # External APIs
     QWEN_API_KEY: Optional[str] = None
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"

@@ -23,54 +23,58 @@ class JupyterSandbox:
     def run_code(self, code: str, timeout: int = 60) -> str:
         """
         Executes code into the live Kernel, intercepts STDOUT, STDERR, and Image Blobs.
+
+        Completion strategy: use iopub 'status: idle' as the primary signal that
+        all output has been flushed. This avoids the race condition where the shell
+        reply arrives before stdout/stderr iopub messages.
         """
+        import re
         msg_id = self.kc.execute(code)
-        
+
         output_chunks = []
-        
+        got_idle = False
+
         while True:
             try:
-                # Wait for the iopub channel responses (stdout, stderr, display data)
                 msg = self.kc.get_iopub_msg(timeout=timeout)
-                msg_type = msg['header']['msg_type']
-                content = msg['content']
-                
-                # Check if it's the conclusion signal
-                if msg_type == 'status' and content.get('execution_state') == 'idle':
-                    # Sometimes status idle comes but we still should verify shell status
-                    pass
-                    
-                if msg_type == 'stream':
-                    output_chunks.append(content['text'])
-                    
-                elif msg_type == 'error':
-                    err = "\n".join(content['traceback'])
-                    # Strip out ANSI escape characters typically returned by Jupyter
-                    import re
-                    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-                    output_chunks.append("ERROR:\n" + ansi_escape.sub('', err))
-                    
-                elif msg_type in ('display_data', 'execute_result'):
-                    data = content.get('data', {})
-                    if 'text/plain' in data:
-                        output_chunks.append(data['text/plain'])
-                    if 'image/png' in data:
-                        b64_image = data['image/png']
-                        output_chunks.append(f"\n[System: Sighted an Image (PNG). Base64 snippet: {b64_image[:30]}...]\n")
-                        # For a real UI, we'd emit this b64_image to the frontend through an Event.
-                        
             except queue.Empty:
                 output_chunks.append("ERROR: Kernel execution timed out.")
                 break
-                
-            # Now we must check if the shell said the execution for our msg_id is done
-            try:
-                # The shell channel returns our final execution status
-                reply = self.kc.get_shell_msg(timeout=0.1)
-                if reply['parent_header'].get('msg_id') == msg_id:
-                    break
-            except queue.Empty:
+
+            # Only process messages belonging to our execution request
+            if msg['parent_header'].get('msg_id') != msg_id:
                 continue
+
+            msg_type = msg['header']['msg_type']
+            content = msg['content']
+
+            if msg_type == 'status' and content.get('execution_state') == 'idle':
+                # All output for this execution has been flushed — safe to exit
+                got_idle = True
+                break
+
+            if msg_type == 'stream':
+                output_chunks.append(content['text'])
+
+            elif msg_type == 'error':
+                err = "\n".join(content['traceback'])
+                ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+                output_chunks.append("ERROR:\n" + ansi_escape.sub('', err))
+
+            elif msg_type in ('display_data', 'execute_result'):
+                data = content.get('data', {})
+                if 'text/plain' in data:
+                    output_chunks.append(data['text/plain'])
+                if 'image/png' in data:
+                    b64_image = data['image/png']
+                    output_chunks.append(f"\n[System: Sighted an Image (PNG). Base64 snippet: {b64_image[:30]}...]\n")
+
+        # Drain the shell reply so it doesn't leak into the next run_code call
+        if got_idle:
+            try:
+                self.kc.get_shell_msg(timeout=3)
+            except queue.Empty:
+                pass
 
         final_out = "\n".join(output_chunks).strip()
         return final_out if final_out else "Execution succeeded without output."

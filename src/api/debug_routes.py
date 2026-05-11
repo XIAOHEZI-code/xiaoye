@@ -5,13 +5,16 @@ import uuid
 import base64
 from typing import List, Any
 import json
+import asyncio
 
-from src.pipeline.pdf_parser import extract_pdf_with_marker, split_markdown_into_chunk_documents
+from src.pipeline.pdf_parser import extract_pdf_with_marker, split_markdown_into_chunk_documents, process_figures, enhance_chunks_with_figures
 from src.pipeline.image_analyzer import analyze_metallurgy_image
-from src.retrieval.semantic_search import SemanticSearchTool
-from src.retrieval.graph_search import GraphLogicTool
-from src.agent.graph import create_worker_graph
-from langchain_core.messages import HumanMessage
+# 延迟导入 - 避免模块加载时阻塞
+# from src.retrieval.semantic_search import SemanticSearchTool
+# from src.retrieval.graph_search import GraphLogicTool
+# 延迟导入 - 不在模块加载时执行
+# from src.agent.graph import create_worker_graph  # 移至函数内导入
+# from langchain_core.messages import HumanMessage  # 移至函数内导入
 
 router = APIRouter()
 
@@ -37,23 +40,25 @@ async def test_chunking(file: UploadFile = File(...), chunk_size: int = 1000):
         import os
         from src.pipeline.pdf_parser import split_markdown_into_chunk_documents
         
-        # Here we also test image chunks
-        from src.models.chunk_document import make_image_chunk
+        # V2: images will be processed via process_figures below
         
         chunk_docs = split_markdown_into_chunk_documents(
             full_text, out_metadata, doc_id=doc_id, source_pdf_id=file.filename, chunk_size=chunk_size
         )
         
-        for img_path in image_paths:
-            # Add images as ChunkDocuments too
-            chunk_docs.append(make_image_chunk(
-                description=f"Extracted image from {file.filename}",
-                doc_id=doc_id,
-                source_pdf_id=file.filename,
-                image_uri=img_path,
-                page_number=-1,
-                bbox=None
-            ))
+        # V2 增强：使用图注提取 + 上下文感知的图片分析
+        figure_chunks = process_figures(
+            md_text=full_text,
+            image_paths=image_paths,
+            doc_id=doc_id,
+            source_pdf_id=file.filename,
+            image_dir=os.path.dirname(os.path.dirname(md_file)) if 'md_file' in dir() else out_dir,
+            analyze_with_vlm=False,  # 调试接口默认不调用 VLM，避免消耗 API 配额
+        )
+        print(f"[Debug] process_figures 返回 {len(figure_chunks)} 个图片 Chunk")
+        # 合并文本 chunks 和图片 chunks
+        # 注意：chunk_docs 此时是 text_chunks，需要合并
+        chunk_docs = enhance_chunks_with_figures(chunk_docs, figure_chunks)
             
         chunks_info = [c.to_dict() for c in chunk_docs]
         
@@ -105,6 +110,10 @@ async def test_retrieval(req: RetrievalTestRequest):
     同时拨测 Semantic Vector 检索库和 Neo4j 知识图谱库。
     """
     try:
+        # 延迟导入
+        from src.retrieval.semantic_search import SemanticSearchTool
+        from src.retrieval.graph_search import GraphLogicTool
+        
         semantic_tool = SemanticSearchTool()
         vector_results = semantic_tool.search(req.query, top_k=req.top_k)
         
@@ -135,38 +144,89 @@ async def test_langchain_stream(req: StreamChatRequest):
     import os
     import sys
     import traceback
+    import logging
+    
+    # 配置日志
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     
     # 清除代理
     for k in list(os.environ.keys()):
         if 'proxy' in k.lower():
             os.environ.pop(k, None)
     
-    try:
-        from src.agent.graph import create_worker_graph
-        from langchain_core.messages import HumanMessage
-        
-        agent = create_worker_graph()
-        inputs = {"messages": [HumanMessage(content=req.query)]}
-        
-        event_log = []
-        
-        # 同步执行（更稳定）
-        for event in agent.stream(inputs, stream_mode="values"):
-            latest_msg = event.get("messages", [])[-1] if event.get("messages") else None
-            if latest_msg:
-                log_entry = {
-                    "type": latest_msg.__class__.__name__,
-                    "content": latest_msg.content[:500] if hasattr(latest_msg, 'content') and latest_msg.content else ""
-                }
-                if hasattr(latest_msg, "tool_calls") and latest_msg.tool_calls:
-                    log_entry["tool_calls"] = latest_msg.tool_calls
-                event_log.append(log_entry)
+    logger.info(f"Starting test_stream for query: {req.query}")
+    
+    def run_agent():
+        try:
+            logger.info("Importing graph module...")
+            from src.agent.graph import create_worker_graph
+            from langchain_core.messages import HumanMessage
+            
+            logger.info("Creating agent...")
+            agent = create_worker_graph()
+            logger.info("Agent created, starting stream...")
+            
+            inputs = {"messages": [HumanMessage(content=req.query)]}
+            
+            event_log = []
+            max_events = 20  # 防止无限循环
+            
+            # 同步执行
+            for i, event in enumerate(agent.stream(inputs, stream_mode="values")):
+                if i >= max_events:
+                    logger.warning(f"Reached max events limit ({max_events}), stopping")
+                    break
                 
-        return {"status": "success", "trajectory": event_log}
+                logger.info(f"Event {i}: {list(event.keys())}")
+                
+                # 记录所有 messages
+                msgs = event.get("messages", [])
+                logger.info(f"Event {i} has {len(msgs)} messages")
+                for j, msg in enumerate(msgs):
+                    logger.info(f"  Message {j}: {msg.__class__.__name__}, content_len={len(msg.content) if hasattr(msg, 'content') else 0}")
+                    if hasattr(msg, 'tool_calls') and msg.tool_calls:
+                        logger.info(f"    Tool calls: {[tc.get('name') for tc in msg.tool_calls]}")
+                
+                latest_msg = msgs[-1] if msgs else None
+                if latest_msg:
+                    log_entry = {
+                        "type": latest_msg.__class__.__name__,
+                        "content": latest_msg.content[:500] if hasattr(latest_msg, 'content') and latest_msg.content else ""
+                    }
+                    # 记录 tool_calls
+                    if hasattr(latest_msg, "tool_calls") and latest_msg.tool_calls:
+                        log_entry["tool_calls"] = [
+                            {"name": tc.get("name"), "args": str(tc.get("args", {}))[:200]} 
+                            for tc in latest_msg.tool_calls
+                        ]
+                        logger.info(f"Event {i} has tool_calls: {[tc.get('name') for tc in latest_msg.tool_calls]}")
+                    event_log.append(log_entry)
+                    
+            logger.info(f"Stream complete, returning {len(event_log)} events")
+            return {"status": "success", "trajectory": event_log}
+        except Exception as e:
+            logger.error(f"Error in run_agent: {e}")
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            error_details = traceback.format_exception(exc_type, exc_value, exc_tb)
+            return {
+                "status": "error", 
+                "message": str(e)[:200], 
+                "trajectory": [],
+                "trace": error_details[-3:] if len(error_details) >= 3 else error_details
+            }
+    
+    try:
+        # 使用 asyncio.to_thread 在线程中运行（现代方式）
+        logger.info("Running in thread...")
+        result = await asyncio.to_thread(run_agent)
+        logger.info("Thread done, returning result")
+        return result
         
     except Exception as e:
         exc_type, exc_value, exc_tb = sys.exc_info()
         error_details = traceback.format_exception(exc_type, exc_value, exc_tb)
+        logger.error(f"Outer error: {e}")
         return {
             "status": "error", 
             "message": str(e)[:200], 

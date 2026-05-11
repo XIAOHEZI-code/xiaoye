@@ -1,0 +1,281 @@
+:root {
+  --base-bg: #1D1C1A; /* Base Background */
+  --panel-bg: #272624; /* Surface */
+  --glass-border: #3D3B38; /* Border/Divider */
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  --text-primary: #E6E4E0; /* Primary Text */
+  --text-secondary: #C4C2BF; /* Secondary Text */
+  --text-muted: #9E9C99; /* Muted Text */
+  --accent: #D97757; /* Accent / 陶土橘 — 铁水颜色，冶金主题 */
+  --accent-light: rgba(217, 119, 87, 0.15); /* Accent background */
+  --accent-hover: #C4633E; /* Accent hover state */
+  --highlight-bg: rgba(217, 119, 87, 0.12); /* 选中背景 */
+  --highlight-border: rgba(217, 119, 87, 0.4); /* 选中边框 */
+  --success: #5A9A6A; /* 就绪绿 */
+  --status-pending: #D4A843; /* 炉料黄 */
+  --status-error: #C44B4B; /* 警报红 */
+  /* Aliases for existing code */
+  --bg-dark: var(--base-bg);
+  --text-main: var(--text-primary);
+}
+
+
+/* 白色主题 */
+[data-theme="light"] {
+  --base-bg: #F0EDE8;
+  --bg-dark: #F0EDE8;
+  --panel-bg: rgba(255, 252, 248, 0.92);
+  --glass-border: rgba(180, 140, 110, 0.25);
+  --glass-shadow: 0 8px 32px 0 rgba(100, 60, 20, 0.12);
+  --text-primary: #2A2520;
+  --text-main: #2A2520;
+  --text-secondary: #5A4E44;
+  --text-muted: #8A7A6E;
+  /* 亮色主题保持冶金橘色系，不用紫色 */
+  --accent: #C4612E;
+  --accent-light: rgba(196, 97, 46, 0.12);
+  --accent-hover: #A8501F;
+  --highlight-bg: rgba(196, 97, 46, 0.1);
+  --highlight-border: rgba(196, 97, 46, 0.35);
+}
+
+[data-theme="light"] body {
+  background-color: #f0f1f3;
+  background-image: none;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  background-image: radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 25%),
+                    radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.05), transparent 25%);
+}
+
+#root {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Glassmorphism Classes */
+.glass-panel {
+  background: var(--panel-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 12px;
+}
+
+/* Scrollbar Styling — slim & unobtrusive */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Base App Layout */
+.app-container {
+  display: flex;
+  height: 100vh;
+  padding: 16px;
+  gap: 0; /* Resizer 组件自身控制间距，不用 gap */
+}
+
+.left-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.right-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel-header {
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  padding: 20px;
+}
+
+/* PDF Viewer Specific */
+.pdf-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  user-select: none;
+}
+
+.pdf-page-wrapper {
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  margin-bottom: 20px;
+  background-color: white; /* PDF content needs white bg usually */
+}
+
+/* Prevent PDF text and annotation layers from intercepting drag events */
+.react-pdf__Page__textContent,
+.react-pdf__Page__annotations {
+  pointer-events: none !important;
+}
+
+/* Bounding Box Selector */
+.drawing-box {
+  position: absolute;
+  background-color: var(--highlight-bg);
+  border: 1px dashed var(--accent);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.rendered-box {
+  position: absolute;
+  background-color: transparent;
+  border: 2px solid var(--accent);
+  border-radius: 4px;
+  z-index: 5;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.rendered-box:hover {
+  background-color: var(--highlight-bg);
+}
+
+/* Context Menu */
+.context-menu {
+  position: absolute;
+  z-index: 100;
+  background: rgba(30, 32, 43, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 160px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95) translateY(-5px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Agent 工作状态脉冲动画 */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* 面板折叠过渡动画 */
+.glass-panel {
+  transition: flex-basis 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.menu-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  transition: background 0.15s;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+/* Notebook Markdown Specific */
+.notebook-content {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.notebook-content h1, .notebook-content h2, .notebook-content h3 {
+  color: white;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+.notebook-content code {
+  background: rgba(0,0,0,0.3);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: #93c5fd;
+}
+
+.notebook-content pre {
+  background: rgba(0,0,0,0.4) !important;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.notebook-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+  margin-left: 0;
+  color: var(--text-muted);
+}

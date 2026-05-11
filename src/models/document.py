@@ -11,8 +11,9 @@ class DocumentMetadata(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     filename = Column(String, nullable=False, index=True)
-    hash = Column(String, unique=True, index=True, nullable=False) # To prevent duplicate processing
-    status = Column(String, default="pending", index=True) # pending, processing, completed, failed
+    hash = Column(String, unique=True, index=True, nullable=False)
+    real_path = Column(String, nullable=False)
+    status = Column(String, default="pending", index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

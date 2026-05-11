@@ -8,12 +8,13 @@ class ElasticsearchIndexer:
     def __init__(self):
         self.es = Elasticsearch(settings.ELASTICSEARCH_URL)
         # We use QWEN's text-embedding-v3 via OpenAI compatible API
+        # check_embedding_ctx_length=False: 禁用 LangChain 的 tiktoken 分词，
+        # Qwen API 只接受原始字符串输入，不支持 token ID 列表
         self.embeddings = OpenAIEmbeddings(
             model=settings.QWEN_EMBEDDING_MODEL,
             api_key=settings.QWEN_API_KEY,
             base_url=settings.QWEN_BASE_URL,
-            # QWen embedding v3 usually gives 1024 or 1536 dim, depending on specific flavor. 
-            # Note: Need to initialize index with correct dims before insertion.
+            check_embedding_ctx_length=False,
         )
         self.index_name = "metallurgy_chunks"
         self._create_index_if_not_exists()
@@ -89,12 +90,30 @@ class ElasticsearchIndexer:
         if not chunks:
             return
 
-        texts = [c.text_content for c in chunks]
+        # 过滤掉空文本的 chunk（embedding API 不接受空字符串）
+        valid_chunks = [c for c in chunks if c.text_content and c.text_content.strip()]
+        skipped = len(chunks) - len(valid_chunks)
+        if skipped:
+            print(f"[Indexer] Skipped {skipped} empty chunks")
+        if not valid_chunks:
+            print("[Indexer] No valid chunks to index")
+            return
+
+        texts = [c.text_content for c in valid_chunks]
         print(f"Generating embeddings for {len(texts)} rich chunks...")
-        vectors = self.embeddings.embed_documents(texts)
+
+        # 分批处理 embedding（每批最多 10 个，Qwen API 限制）
+        BATCH_SIZE = 10
+        all_vectors = []
+        for i in range(0, len(texts), BATCH_SIZE):
+            batch = texts[i:i + BATCH_SIZE]
+            vectors = self.embeddings.embed_documents(batch)
+            all_vectors.extend(vectors)
+            if len(texts) > BATCH_SIZE:
+                print(f"  Embedded batch {i//BATCH_SIZE + 1}/{(len(texts)-1)//BATCH_SIZE + 1}")
 
         actions = []
-        for chunk, vector in zip(chunks, vectors):
+        for chunk, vector in zip(valid_chunks, all_vectors):
             source = chunk.to_dict()
             source["vector"] = vector
             actions.append({

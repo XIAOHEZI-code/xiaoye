@@ -6,8 +6,11 @@ from pydantic import BaseModel, Field
 from src.retrieval.semantic_search import SemanticSearchTool
 from src.retrieval.graph_search import GraphLogicTool
 from src.tools.sandbox import get_sandbox
+from src.tools.pdf_cropper import crop_pdf_to_base64_png
+from src.pipeline.image_analyzer import analyze_metallurgy_image_with_context, ImageEvaluationResult
 from src.agent.tool_search import ToolMetadata, get_tool_search_engine
 import json
+import os
 
 semantic_searcher = SemanticSearchTool()
 graph_searcher = GraphLogicTool()
@@ -39,6 +42,22 @@ class SearchToolsInput(BaseModel):
     max_results: int = Field(default=5, description="Max number of results")
 
 
+class PdfCropperInput(BaseModel):
+    document_id: str = Field(description="The document ID (returned from PDF upload)")
+    page_number: int = Field(description="Page number to crop (1-indexed)")
+    x0: float = Field(description="Left boundary ratio (0.0~1.0)")
+    y0: float = Field(description="Top boundary ratio (0.0~1.0)")
+    x1: float = Field(description="Right boundary ratio (0.0~1.0)")
+    y1: float = Field(description="Bottom boundary ratio (0.0~1.0)")
+
+
+class ImageAnalyzerInput(BaseModel):
+    image_base64: str = Field(description="Base64 encoded image (PNG/JPEG)")
+    caption: str = Field(default="", description="Optional figure caption text")
+    context_above: str = Field(default="", description="Optional text context above the image")
+    context_below: str = Field(default="", description="Optional text context below the image")
+
+
 # =============================================================
 #  1. 定义原子工具 (Atomic Tools) - 纯函数定义
 # =============================================================
@@ -50,7 +69,69 @@ def execute_metallurgy_python(code: str) -> str:
     重要提示：环境中的变量具有生命周期，在第一轮定义的变量可以在以后的调用中继续使用！如果生成图表，会自动拦截并返回Base64。
     """
     sandbox = get_sandbox()
-    return sandbox.run_code(code)
+    result = sandbox.run_code(code)
+
+    # Side-effect: 如果输出中包含 Base64 图片，通过 Redis SSE 推送到前端
+    if "[System: Sighted an Image" in result:
+        try:
+            import redis as sync_redis
+            from src.core.config import settings as _settings
+            rc = sync_redis.from_url(_settings.CELERY_BROKER_URL)
+            rc.publish("xiaoye_sse", json.dumps({
+                "type": "sandbox_image",
+                "content": result,
+            }, ensure_ascii=False))
+            rc.close()
+        except Exception as e:
+            print(f"[Tool:execute_metallurgy_python] SSE push failed (non-fatal): {e}")
+
+    return result
+
+
+def crop_pdf_region(document_id: str, page_number: int, x0: float, y0: float, x1: float, y1: float) -> str:
+    """
+    从已上传的 PDF 文档中精确裁切指定区域，返回高清 Base64 PNG 图片。
+    使用场景：当你需要分析论文中的某个图表、公式或微观组织照片时，先裁切再发送给 image_analyzer。
+    坐标使用相对比例 (0.0~1.0)，(x0,y0) 为左上角，(x1,y1) 为右下角。
+    """
+    from src.core.config import settings as _settings
+    # 根据 document_id 找到实际 PDF 路径
+    pdf_path = os.path.join(_settings.UPLOAD_DIR, f"{document_id}.pdf")
+    if not os.path.exists(pdf_path):
+        # 尝试在 data/pdfs 下查找
+        alt_path = os.path.join("data", "pdfs", f"{document_id}.pdf")
+        if os.path.exists(alt_path):
+            pdf_path = alt_path
+        else:
+            return f"Error: PDF file not found for document_id={document_id}"
+
+    relative_bbox = {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
+    try:
+        b64_png = crop_pdf_to_base64_png(pdf_path, page_number, relative_bbox)
+        return f"Successfully cropped page {page_number} region ({x0:.2f},{y0:.2f})-({x1:.2f},{y1:.2f}). Base64 PNG length: {len(b64_png)} chars. Use image_analyzer tool to analyze this image.\n\n[CROPPED_IMAGE_BASE64]:{b64_png[:200]}..."
+    except Exception as e:
+        return f"Error cropping PDF: {e}"
+
+
+def analyze_metallurgy_image(image_base64: str, caption: str = "", context_above: str = "", context_below: str = "") -> str:
+    """
+    使用 Qwen3-VL 视觉大模型分析冶金图像/图表。
+    支持四分类体系：基础热力学图表、传输过程模拟图、宏观过程时序图、微观组织表征图谱。
+    传入图片的 Base64 编码，可选传入图注和上下文文字以提升分析精度。
+    返回结构化的分类、描述和关键指标。
+    """
+    result: ImageEvaluationResult = analyze_metallurgy_image_with_context(
+        image_base64=image_base64,
+        caption=caption or None,
+        context_above=context_above or None,
+        context_below=context_below or None,
+    )
+    return json.dumps({
+        "category": result.category,
+        "sub_category": result.sub_category,
+        "description": result.description,
+        "key_metrics": result.key_metrics,
+    }, ensure_ascii=False, indent=2)
 
 
 def search_metallurgy_text(query: str, top_k: int = 3) -> str:
@@ -66,7 +147,36 @@ def search_metallurgy_text(query: str, top_k: int = 3) -> str:
     for r in results:
         citation = r.to_citation_str()
         formatted.append(f"Doc: {r.doc_id} {citation} (Type: {r.source_type})\nContent: {r.text_content}")
-        
+
+    # ── Side-effect: 推送检索源信息到前端 ────────────────────────────
+    # 无论谁调用此 tool（Agent / chat_worker），都会自动通知前端展示命中的文献
+    try:
+        import redis as sync_redis
+        from src.core.config import settings as _settings
+
+        # 按 doc_id 去重，聚合页码
+        source_map = {}
+        for r in results:
+            if r.doc_id not in source_map:
+                source_map[r.doc_id] = {
+                    "doc_id": r.doc_id,
+                    "filename": r.source_pdf_id or r.doc_id,
+                    "pages": [],
+                    "score": r.score or 0,
+                    "chunk_type": r.chunk_type,
+                }
+            if r.page_number > 0 and r.page_number not in source_map[r.doc_id]["pages"]:
+                source_map[r.doc_id]["pages"].append(r.page_number)
+
+        rc = sync_redis.from_url(_settings.CELERY_BROKER_URL)
+        rc.publish("xiaoye_sse", json.dumps({
+            "type": "retrieval_sources",
+            "sources": list(source_map.values()),
+        }, ensure_ascii=False))
+        rc.close()
+    except Exception as e:
+        print(f"[Tool:search_metallurgy_text] Failed to push retrieval sources (non-fatal): {e}")
+
     return "\n\n---\n\n".join(formatted)
 
 
@@ -190,6 +300,24 @@ def _register_all_tools():
         should_defer=True
     ))
 
+    # PDF 区域裁切 — 延迟加载（视觉工具）
+    engine.register(crop_pdf_region, ToolMetadata(
+        name="crop_pdf_region",
+        description="从已上传的 PDF 中裁切指定区域，返回高清 Base64 PNG，用于后续 VLM 视觉分析",
+        category="vision",
+        search_hint="裁切 截图 图片 PDF 区域 截取 crop 图表 公式",
+        should_defer=True
+    ))
+
+    # VLM 冶金图像分析 — 延迟加载（视觉工具）
+    engine.register(analyze_metallurgy_image, ToolMetadata(
+        name="analyze_metallurgy_image",
+        description="使用 Qwen3-VL 视觉大模型分析冶金图像，支持热力学/传输过程/宏观控制/微观组织四分类体系",
+        category="vision",
+        search_hint="图片 图像 分析 VLM 视觉 SEM TEM 金相 相图 微观 宏观 图表 识别",
+        should_defer=True
+    ))
+
     # search_available_tools 自身 — 永不隐藏（LLM 需要它来找其他工具）
     engine.register(search_available_tools, ToolMetadata(
         name="search_available_tools",
@@ -245,6 +373,21 @@ CALCULATION_TOOLS = [
     )
 ]
 
+VISION_TOOLS = [
+    StructuredTool.from_function(
+        func=crop_pdf_region,
+        name="crop_pdf_region",
+        description="Crop a specific region from an uploaded PDF page and return high-res Base64 PNG.",
+        args_schema=PdfCropperInput
+    ),
+    StructuredTool.from_function(
+        func=analyze_metallurgy_image,
+        name="analyze_metallurgy_image",
+        description="Analyze a metallurgy image using Qwen3-VL vision model with 4-category classification.",
+        args_schema=ImageAnalyzerInput
+    )
+]
+
 SEARCH_TOOLS = [
     StructuredTool.from_function(
         func=search_available_tools,
@@ -254,14 +397,15 @@ SEARCH_TOOLS = [
     )
 ]
 
-# ToolNode 需要的全量工具列表（包含 search_available_tools）
-ALL_TOOLS = TEXT_TOOLS + GRAPH_TOOLS + CALCULATION_TOOLS + SEARCH_TOOLS
+# ToolNode 需要的全量工具列表（包含所有类别 + search_available_tools）
+ALL_TOOLS = TEXT_TOOLS + GRAPH_TOOLS + CALCULATION_TOOLS + VISION_TOOLS + SEARCH_TOOLS
 
 TOOL_REGISTRY = {
     "text": TEXT_TOOLS,
     "graph": GRAPH_TOOLS,
     "calculation": CALCULATION_TOOLS,
-    "general": TEXT_TOOLS + GRAPH_TOOLS + CALCULATION_TOOLS + SEARCH_TOOLS
+    "vision": VISION_TOOLS,
+    "general": ALL_TOOLS
 }
 
 

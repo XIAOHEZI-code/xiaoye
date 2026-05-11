@@ -31,11 +31,14 @@ class SemanticSearchTool:
         self.query_builder = QueryBuilder()
         self.hybrid_scorer = HybridScorer()
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 5) -> List["ChunkDocument"]:
         """
         Translates query -> ES DSL (BM25) + Dense Vector.
         Retrieves both streams and fuses them using RRF.
+        Returns a list of ChunkDocument with rich media metadata.
         """
+        from src.models.chunk_document import ChunkDocument
+        
         print(f"[SemanticSearchTool] Generating Hybrid Search for query: '{query}'")
         
         # 1. Expand query via NLP tools
@@ -46,6 +49,12 @@ class SemanticSearchTool:
 
         # We request 2 times the top_k to give RRF enough candidates to work with
         candidate_pool_size = top_k * 2
+        
+        # Rich media schema source fields
+        source_fields = [
+            "chunk_id", "doc_id", "content", "source_type", 
+            "source_pdf_id", "page_number", "bbox", "image_uri", "chunk_type"
+        ]
 
         # 2. Vector Search (KNN)
         knn_query = {
@@ -59,7 +68,7 @@ class SemanticSearchTool:
             vector_res = self.es.search(
                 index=self.index_name, 
                 knn=knn_query, 
-                _source=["chunk_id", "doc_id", "content", "source_type"], 
+                _source=source_fields, 
                 size=candidate_pool_size
             )
             vector_hits = vector_res.get("hits", {}).get("hits", [])
@@ -72,7 +81,7 @@ class SemanticSearchTool:
             lexical_res = self.es.search(
                 index=self.index_name, 
                 query=es_dsl, 
-                _source=["chunk_id", "doc_id", "content", "source_type"], 
+                _source=source_fields, 
                 size=candidate_pool_size
             )
             lexical_hits = lexical_res.get("hits", {}).get("hits", [])
@@ -96,16 +105,13 @@ class SemanticSearchTool:
 
         rrf_ranked = self.hybrid_scorer.reciprocal_rank_fusion(lex_results, vec_results, k=60)
         
-        # 5. Return Top-K
+        # 5. Return Top-K as ChunkDocument
         final_results = []
         for item in rrf_ranked[:top_k]:
             cid = item["doc_id"]
             src = docs_map[cid]
-            final_results.append({
-                "score": item["rrf_score"],
-                "doc_id": src.get("doc_id"),
-                "content": src.get("content"),
-                "source_type": src.get("source_type")
-            })
+            # Use the class factory to deserialize properly
+            chunk_doc = ChunkDocument.from_es_hit(src, score=item["rrf_score"])
+            final_results.append(chunk_doc)
             
         return final_results

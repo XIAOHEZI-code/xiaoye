@@ -1,5 +1,5 @@
 import json
-from src.agent.tools import TOOL_REGISTRY
+from src.agent.tool_search import get_tool_search_engine
 
 # ---------------------------------------------------------
 # Pseudo-MCP (Model Context Protocol) Server Adapter
@@ -8,32 +8,19 @@ from src.agent.tools import TOOL_REGISTRY
 # ---------------------------------------------------------
 
 class MCPRegistryAdapter:
-    def __init__(self):
-        # We hold all tools internally
-        self.registry = {}
-        for category, tools in TOOL_REGISTRY.items():
-            for t in tools:
-                self.registry[t.name] = t
-
     def list_tools(self, domain_hints: list) -> list:
         """
         Acts like mcp.list_tools() returning JSON schemas.
         Simulates an API endpoint.
         """
-        selected_tool_names = set()
-        
-        for hint in domain_hints:
-            if hint in TOOL_REGISTRY:
-                for t in TOOL_REGISTRY[hint]:
-                    selected_tool_names.add(t.name)
-        
+        engine = get_tool_search_engine()
+        # Mock behavior: Just return everything the engine knows about
+        # In a real MCP scenario, this would query a remote service
         mcp_schemas = []
-        for name in selected_tool_names:
-            t = self.registry[name]
+        for name in engine._registry.keys():
             mcp_schemas.append({
                 "name": name,
-                "description": t.description,
-                "schema": t.args_schema.schema() if t.args_schema else {}
+                "description": engine._registry[name].description,
             })
         return mcp_schemas
 
@@ -41,16 +28,15 @@ class MCPRegistryAdapter:
         """
         For localized LangChain runtime, returns actual tool callables.
         In a fully decoupled architecture, this would return remote proxy stubs.
+        Note: The progressive disclosure engine now handles tool loading,
+        so this just returns an empty list for now to represent 0 remote tools.
         """
-        selected = set()
-        for hint in domain_hints:
-            if hint in TOOL_REGISTRY:
-                selected.update(TOOL_REGISTRY[hint])
-        return list(selected)
+        return []
 
     def call_tool(self, name: str, arguments: dict):
         """Acts like mcp.call_tool() - execute remotely."""
-        target_tool = self.registry.get(name)
+        engine = get_tool_search_engine()
+        target_tool = engine.get_tool_callable(name)
         
         if not target_tool:
             return {"error": f"Tool {name} not found in MCP Server."}

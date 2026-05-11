@@ -73,3 +73,38 @@ htmlcov/
 
 # mypy
 .mypy_cache/
+
+# Conda packages cache
+conda_pkgs/
+
+# Project-specific virtual env
+env_xiaoye/
+
+# Frontend build artifacts & deps
+frontend/node_modules/
+frontend/dist/
+
+# Data / uploads (large binary files)
+data/
+
+# Genkit
+.genkit/
+
+# Temporary test outputs
+pytest_out*.txt
+ragflow_test_output.txt
+
+# Backup files
+*.bak
+*.backup
+
+# Scratch test files
+scratch_test*.py
+es_test.py
+run_m1_test.py
+
+# 软著 (copyright docs, binary)
+软著/
+
+# Document directory (drawio / docx binaries)
+document/
