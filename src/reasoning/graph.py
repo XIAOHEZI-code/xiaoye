@@ -56,7 +56,7 @@ def create_worker_graph():
     tool_loader = ToolLoader()
     
     # 1. Researcher Node
-    def researcher_node(state: AgentState):
+    async def researcher_node(state: AgentState):
         """Single-task Executor."""
         from langchain_core.messages import AIMessage
         
@@ -80,8 +80,9 @@ def create_worker_graph():
         # 确保以 HumanMessage 结尾，避免大模型 API 报错
         msgs_to_send = [SystemMessage(content=sys_prompt)] + state["messages"][1:] + [HumanMessage(content=user_prompt)]
         
-        # 使用非流式调用以确保 tool_calls 参数正确传递
-        response = dynamic_llm.invoke(msgs_to_send)
+        # 使用流式调用或异步调用
+        # 这里改用 ainvoke，具体的流式输出可以依靠外部的 astream_events 捕获
+        response = await dynamic_llm.ainvoke(msgs_to_send)
         
         # 提取 response 和 tool_calls
         response_text = response.content if hasattr(response, 'content') else str(response)
@@ -102,7 +103,7 @@ def create_worker_graph():
         }
 
     # 2. Compactor Node
-    def compactor_node(state: AgentState):
+    async def compactor_node(state: AgentState):
         """Claude Pattern: Prevent context overflow"""
         messages = list(state["messages"])
         if not messages:
@@ -120,7 +121,7 @@ def create_worker_graph():
         return {"messages": []}
 
     # 3. Evaluator Node
-    def evaluator_node(state: AgentState):
+    async def evaluator_node(state: AgentState):
         """Reflects on the Tool Output against the single sub-task."""
         from langchain_core.messages import ToolMessage
         
@@ -152,7 +153,7 @@ def create_worker_graph():
         """
         
         eval_llm = llm.with_structured_output(Evaluation, method="function_calling")
-        eval_obj = eval_llm.invoke([HumanMessage(content=prompt)])
+        eval_obj = await eval_llm.ainvoke([HumanMessage(content=prompt)])
         
         updates = {"step_satisfied": eval_obj.is_satisfied, "loop_count": current_loop}
         
@@ -192,12 +193,15 @@ def create_worker_graph():
     
     return workflow.compile()
 
-async def run_worker_pipeline(payload: dict) -> str:
-    """Async entry wrapper specifically for the SwarmCoordinator.
+async def run_worker_pipeline(payload: dict, task_id: str) -> str:
+    """Async entry wrapper specifically for the SwarmCoordinator or ChatWorker.
     
-    接通真实 LLM 调用，通过 LangGraph ainvoke 驱动完整的
-    Researcher → ToolNode → Compactor → Evaluator ReAct 循环。
+    接通真实 LLM 调用，通过 LangGraph astream_events 驱动完整的
+    Researcher → ToolNode → Compactor → Evaluator ReAct 循环，并将事件推给 SSE。
     """
+    from src.delivery.sse_channel import get_sse_channel
+    sse = get_sse_channel()
+    
     graph = create_worker_graph()
     state = {
         "messages": [SystemMessage(content=payload["task_description"])],
@@ -205,21 +209,42 @@ async def run_worker_pipeline(payload: dict) -> str:
         "past_steps": [],
         "ready_to_synthesize": False,
         "loop_count": 0,
-        # Claude Pattern: Thinking Chain
         "reasoning": [],
-        "thinking_config": {"type": "disabled"}
+        "thinking_config": {"type": "disabled"},
+        "task_id": task_id
     }
     
+    final_output = ""
     try:
-        result = await graph.ainvoke(state)
-        # 从最终 messages 中提取 AI 的最后回答
-        ai_messages = [
-            m for m in result["messages"]
-            if isinstance(m, AIMessage) and m.content and not m.content.startswith("EVALUATOR_FEEDBACK")
-        ]
-        if ai_messages:
-            return ai_messages[-1].content
-        return "Worker completed but produced no textual output."
+        async for event in graph.astream_events(state, version="v2"):
+            kind = event["event"]
+            
+            # Stream Token 输出
+            if kind == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                if hasattr(chunk, "content") and chunk.content:
+                    final_output += chunk.content
+                    await sse.async_publish_chat_patch(task_id, chunk.content)
+            
+            # Tool 开始调用
+            elif kind == "on_tool_start":
+                tool_name = event["name"]
+                await sse.async_publish_chat_patch(task_id, f"\n\n> 🛠️ **正在调用工具检索...** (`{tool_name}`)\n")
+                
+            # Node 完成，检查是不是 Evaluator 发出了驳回
+            elif kind == "on_chain_end" and event["name"] == "evaluator":
+                out_state = event["data"].get("output", {})
+                if out_state and "messages" in out_state:
+                    msgs = out_state["messages"]
+                    for m in msgs:
+                        if hasattr(m, "content") and "EVALUATOR_FEEDBACK" in m.content:
+                            fb = m.content.split(":", 1)[-1].strip()
+                            await sse.async_publish_chat_patch(task_id, f"\n> 🤔 **数据不够充分，思考策略重试中...**\n> 内部反馈: {fb}\n\n")
+
+        if not final_output:
+            return "Worker completed but produced no textual output."
+        return final_output
     except Exception as e:
         print(f"[Worker Pipeline] ❌ Execution failed: {e}")
+        await sse.async_publish_chat_patch(task_id, f"\n\n> ❌ **管线执行异常**: {e}\n")
         return f"[Worker Error] {e}"

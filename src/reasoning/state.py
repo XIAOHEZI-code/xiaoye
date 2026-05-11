@@ -35,3 +35,6 @@ class AgentState(TypedDict):
     
     # Thinking configuration: {"type": "disabled"} or {"type": "adaptive", "budget": 32000}
     thinking_config: dict
+    
+    # Task ID for SSE Streaming
+    task_id: str

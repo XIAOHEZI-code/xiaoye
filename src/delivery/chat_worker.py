@@ -62,164 +62,58 @@ async def dispatch_chat_worker(
         raw_vlm = await r.get(vlm_key)
         vlm_context = raw_vlm.decode("utf-8") if raw_vlm else None
 
-        # ── Step 2: 文献检索（无 VLM 上下文时启用）────────────────────────────
-        retrieved_context = ""
-        if not vlm_context:
-            # ── Step 2a: 写操作安全阀门（Human-In-The-Loop）──────────────────
-            write_keywords = ["删除", "修改", "更新", "插入", "写入", "执行", "drop", "delete", "update", "insert", "execute"]
-            if any(kw in message.lower() for kw in write_keywords):
-                try:
-                    ask_id = await trigger_ask_user(
-                        task_id=task_id,
-                        question=f"您的指令可能涉及数据修改操作：\n\n> {message[:200]}\n\n确认继续执行？",
-                        ask_type="confirm",
-                    )
-                    reply = await wait_for_user_reply(ask_id, timeout=120)
-                    if reply != "yes":
-                        await sse.async_publish_chat_patch(
-                            task_id=task_id,
-                            patch="\n> ⛔ **用户已取消操作。**\n\n---\n"
-                        )
-                        return
-                    await sse.async_publish_chat_patch(
-                        task_id=task_id,
-                        patch="\n> ✅ **用户已确认，继续执行...**\n\n"
-                    )
-                except Exception as ask_err:
-                    print(f"[ChatWorker] AskUser safety gate failed (non-fatal): {ask_err}")
-
-            # ── Step 2b: 文献检索 ────────────────────────────────────────────
-            await sse.async_publish_chat_patch(
-                task_id=task_id,
-                patch="\n> 🔍 **正在检索知识库...**（`search_metallurgy_text`）\n"
-            )
-            try:
-                # [M5] 通过 ToolRegistry 获取工具，不再硬编码依赖 agent/tools.py
-                from src.tooling.registry import get_tool_registry
-                registry = get_tool_registry()
-                all_tools = registry.get_all_tools()
-                search_tool = next((t for t in all_tools if t.name == "search_metallurgy_text"), None)
-                
-                if search_tool:
-                    results_str = search_tool.invoke({"query": message, "top_k": 3})
-                    if results_str and "No relevant" not in results_str:
-                        retrieved_context = results_str
-                        await sse.async_publish_chat_patch(
-                            task_id=task_id,
-                            patch="> ✅ **找到相关文献片段，正在综合分析...**\n\n"
-                        )
-                    else:
-                        await sse.async_publish_chat_patch(
-                            task_id=task_id,
-                            patch="> ℹ️ **知识库暂无相关文献，使用通用冶金知识回答**\n\n"
-                        )
-                else:
-                    raise Exception("Tool 'search_metallurgy_text' not found in registry")
-            except Exception as e:
-                # 检索失败不阻断流程，降级为通用回答
-                await sse.async_publish_chat_patch(
-                    task_id=task_id,
-                    patch=f"> ⚠️ 检索服务暂时不可用（{type(e).__name__}），使用通用知识回答\n\n"
-                )
-
-        # ── Step 3: 构建 Prompt ────────────────────────────────────────────────
-        from langchain_openai import ChatOpenAI
-        from langchain_core.messages import SystemMessage, HumanMessage
-
+        # ── Step 2: 组装任务描述 (Task Description) ──────────────────────────────
+        # 记忆前缀（注入到所有模式）
+        memory_prefix = f"\n\n【长程记忆】\n{memory_context}\n" if memory_context else ""
         history_str = (
             "\n".join([
                 f"用户: {h['user']}\n小冶: {h['assistant']}"
-                for h in history[-6:]  # 最近 6 轮上下文
+                for h in history[-6:]
             ])
             if history
             else ""
         )
 
-        # 记忆前缀（注入到所有模式）
-        memory_prefix = f"\n\n【长程记忆】\n{memory_context}\n" if memory_context else ""
-
         if vlm_context:
             # 模式 A: VLM 精准上下文追问
-            system_prompt = (
-                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。"
-                "请基于下方视觉大模型对论文图表的分析结果，向导师做详细的汇报。"
-                "回答要谦逊、专业，尊称用户为'老板'或'导师'。务必直接给出具体数据，而不是文字堆砌。如果有任何可用的图片Markdown格式信息，请必须在回答中将其渲染出来。"
-            )
-            user_content = (
-                f"{memory_prefix}"
+            task_description = (
+                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
+                "请基于下方视觉大模型对论文图表的分析结果，向导师做详细的汇报。\n"
+                "**强制要求**：务必直接给出具体数据，而不是文字堆砌。如果有任何可用的图片Markdown格式信息，请必须在回答中将其渲染出来。\n"
+                f"{memory_prefix}\n"
                 f"【VLM 视觉分析结果】\n{vlm_context}\n\n"
                 f"【对话历史】\n{history_str}\n\n"
-                f"【用户追问】\n{message}"
-            )
-        elif retrieved_context:
-            # 模式 B: 文献检索增强回答
-            system_prompt = (
-                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。"
-                "导师交给你了一个问题，你刚刚从实验室文献库里查阅了一些资料（包括文本和图片片段）。"
-                "请基于下方提供的文献片段向导师汇报你的结论。回答要谦逊、严谨，尊称用户为'老板'或'导师'。"
-                "**强制要求**："
-                "1. 不要在回答中进行大量的文字堆砌，请用数据说话！提取有价值的科研数据点（如抗拉强度、温度、元素成分等）进行有理有据的分析。"
-                "2. 如果提供的文献片段中包含了 Image Markdown 语法（如 `![图表](http...)`），你必须原封不动地将该 Markdown 图片语法插入到你的回答中合适的位置，以便向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。"
-            )
-            user_content = (
-                f"{memory_prefix}"
-                f"【检索到的相关文献片段】\n{retrieved_context}\n\n"
-                f"【对话历史】\n{history_str}\n\n"
-                f"【用户问题】\n{message}"
+                f"【导师（用户）问题】\n{message}"
             )
         else:
-            # 模式 C: 通用冶金知识问答（降级）
-            system_prompt = (
-                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。"
-                "因为没查到具体的文献，你现在只能凭自己所学的冶金常识向导师解答。"
-                "回答要谦逊、专业，尊称用户为'老板'或'导师'。如果不知道就大方承认自己还需要多读文献。"
-            )
-            user_content = (
-                f"{memory_prefix}"
+            # 模式 B/C: 文献检索增强 / 通用知识问答
+            task_description = (
+                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
+                "现在你需要回答导师的问题。如果需要事实支持，请自主调用合适的检索工具（例如 search_metallurgy_text 等）查找资料。\n"
+                "**强制要求**：\n"
+                "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
+                "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
+                f"{memory_prefix}\n"
                 f"【对话历史】\n{history_str}\n\n"
-                f"【用户问题】\n{message}"
-            ) if history_str else f"{memory_prefix}{message}" if memory_prefix else message
-
-        # ── Step 4: 流式调用 LLM ──────────────────────────────────────────────
-        llm = ChatOpenAI(
-            model="qwen-max",
-            api_key=settings.QWEN_API_KEY,
-            base_url=settings.QWEN_BASE_URL,
-            temperature=0.3,
-            streaming=True,
-        )
-
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_content),
-        ]
-
-        full_response = ""
-        try:
-            async for chunk in llm.astream(messages):
-                if chunk.content:
-                    full_response += chunk.content
-                    await sse.async_publish_chat_patch(
-                        task_id=task_id,
-                        patch=chunk.content
-                    )
-        except Exception as e:
-            await sse.async_publish_chat_patch(
-                task_id=task_id,
-                patch=f"\n\n**[LLM 错误]** {type(e).__name__}: {str(e)}\n"
+                f"【导师（用户）问题】\n{message}"
             )
-            return
 
-        # ── Step 5: 更新对话历史 + 结束信号 ───────────────────────────────────
+        # ── Step 3: 调用 Reasoning 智能体管线 (取代原硬编码) ────────────────────
+        from src.reasoning.graph import run_worker_pipeline
+        payload = {"task_description": task_description}
+        
+        # 运行图并自动获取 SSE 推送
+        full_response = await run_worker_pipeline(payload, task_id)
+
+        # ── Step 4: 更新对话历史 + 结束信号 ───────────────────────────────────
         history_key = f"xiaoye:chat:{task_id}:history"
         history.append({"user": message, "assistant": full_response})
         if len(history) > 10:
             history = history[-10:]
         await r.set(history_key, json.dumps(history, ensure_ascii=False))
 
-        # ── Step 6: 持久化记忆到硬盘 ──────────────────────────────────────────
+        # ── Step 5: 持久化记忆到硬盘 ──────────────────────────────────────────
         try:
-            # 会话摘要：保留最近的问答对
             summary = f"用户问: {message[:200]}\n小冶答: {full_response[:500]}"
             extract_and_save_memory(
                 task_id=task_id,
@@ -231,4 +125,4 @@ async def dispatch_chat_worker(
 
         await sse.async_publish_chat_patch(task_id=task_id, patch="\n\n---\n")
 
-        print(f"[ChatWorker] task={task_id} completed. mode={'vlm' if vlm_context else 'rag' if retrieved_context else 'general'}")
+        print(f"[ChatWorker] task={task_id} completed via Reasoning pipeline.")
