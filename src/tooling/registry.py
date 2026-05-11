@@ -84,7 +84,7 @@ class DefaultToolRegistry(ToolRegistry):
 
     def get_always_loaded_tools(self) -> List[BaseTool]:
         self._ensure_init()
-        return self._get_tools_for_step("")
+        return self.get_tools_for_task("")
 
 
 # ── 全局单例 ──────────────────────────────────────────────────
