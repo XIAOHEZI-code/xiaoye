@@ -7,10 +7,7 @@ import { FileUp, ZoomIn, ZoomOut, Search, Sun } from 'lucide-react';
 import { useToast } from './Toast';
 
 // Setup local worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 // PDF.js document options — CJK 字体正确渲染
 const PDF_OPTIONS = {
