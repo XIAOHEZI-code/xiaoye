@@ -11,6 +11,7 @@ from src.ingestion.image_analyzer import analyze_metallurgy_image_with_context, 
 from src.tooling.search_engine import ToolMetadata, get_tool_search_engine
 import json
 import os
+from langchain_core.tools import StructuredTool
 
 semantic_searcher = SemanticSearchTool()
 graph_searcher = GraphLogicTool()
@@ -336,8 +337,6 @@ _register_all_tools()
 # =============================================================
 #  4. 对外暴露的工具装载接口 (StructuredTool 包装)
 # =============================================================
-
-from langchain_core.tools import StructuredTool
 
 # 使用 StructuredTool.from_function 包装纯函数
 TEXT_TOOLS = [
