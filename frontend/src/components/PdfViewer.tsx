@@ -6,8 +6,8 @@ import type { BoundingBox } from '../App';
 import { FileUp, ZoomIn, ZoomOut, Search, Sun } from 'lucide-react';
 import { useToast } from './Toast';
 
-// Setup local worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+// Setup local worker to allow it to find openjpeg.wasm in the same directory
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf-assets/pdf.worker.min.mjs';
 
 // PDF.js document options — CJK 字体正确渲染
 const PDF_OPTIONS = {
