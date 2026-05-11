@@ -7,13 +7,13 @@ from typing import List, Any
 import json
 import asyncio
 
-from src.pipeline.pdf_parser import extract_pdf_with_marker, split_markdown_into_chunk_documents, process_figures, enhance_chunks_with_figures
-from src.pipeline.image_analyzer import analyze_metallurgy_image
+from src.ingestion.pdf_parser import extract_pdf_with_marker, split_markdown_into_chunk_documents, process_figures, enhance_chunks_with_figures
+from src.ingestion.image_analyzer import analyze_metallurgy_image
 # 延迟导入 - 避免模块加载时阻塞
 # from src.retrieval.semantic_search import SemanticSearchTool
 # from src.retrieval.graph_search import GraphLogicTool
 # 延迟导入 - 不在模块加载时执行
-# from src.agent.graph import create_worker_graph  # 移至函数内导入
+# from src.reasoning.graph import create_worker_graph  # 移至函数内导入
 # from langchain_core.messages import HumanMessage  # 移至函数内导入
 
 router = APIRouter()
@@ -38,7 +38,7 @@ async def test_chunking(file: UploadFile = File(...), chunk_size: int = 1000):
             
         full_text, image_paths, out_metadata = extract_pdf_with_marker(pdf_path, out_dir)
         import os
-        from src.pipeline.pdf_parser import split_markdown_into_chunk_documents
+        from src.ingestion.pdf_parser import split_markdown_into_chunk_documents
         
         # V2: images will be processed via process_figures below
         
@@ -160,7 +160,7 @@ async def test_langchain_stream(req: StreamChatRequest):
     def run_agent():
         try:
             logger.info("Importing graph module...")
-            from src.agent.graph import create_worker_graph
+            from src.reasoning.graph import create_worker_graph
             from langchain_core.messages import HumanMessage
             
             logger.info("Creating agent...")

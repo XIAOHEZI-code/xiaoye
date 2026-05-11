@@ -1,5 +1,5 @@
 import json
-from src.agent.tool_search import get_tool_search_engine
+from src.tooling.search_engine import get_tool_search_engine
 
 # ---------------------------------------------------------
 # Pseudo-MCP (Model Context Protocol) Server Adapter

@@ -1,13 +1,18 @@
+"""
+Reasoning Pipeline — Swarm Coordinator
+
+[M5 迁移] 从 src/agent/swarm_coordinator.py 迁移至 src/reasoning/coordinator.py
+import 路径已更新为 reasoning 管线内部引用。
+"""
+
 import asyncio
 import os
 import json
-from src.agent.task_board import TaskBoard
+from src.reasoning.task_board import TaskBoard
 from src.core.config import settings
 
 # ---------------------------------------------------------
 # Claude Pattern: Coordinator Mode & Blackboard Spawning
-# Replaces the tight AgentState loop. The manager splits
-# the task, pushes it to board, and Idle-loops.
 # ---------------------------------------------------------
 
 class SwarmCoordinator:
@@ -27,11 +32,9 @@ class SwarmCoordinator:
             if unassigned_tasks:
                 for task in unassigned_tasks:
                     print(f"[Coordinator] Sighted UNBLOCKED task: {task['task_id']}. Spawning Worker...")
-                    # In a real environment, this might be submitting to a Celery queue
-                    # Here we spawn an asyncio task representing an independent process
                     asyncio.create_task(self.spawn_worker(task['task_id']))
                     
-            # 2. Check if entire board is COMPLETED (End condition)
+            # 2. Check if entire board is COMPLETED
             if self._is_all_completed():
                 print("[Coordinator] All tasks COMPLETED! Coordinator winding down.")
                 break
@@ -42,26 +45,22 @@ class SwarmCoordinator:
         return self._aggregate_results()
 
     async def spawn_worker(self, task_id: str):
-        """Simulates an independent Agent RAG process."""
+        """Spawns an independent Agent RAG process."""
         owner_name = f"Worker_{os.getpid()}_{task_id[-4:]}"
         if not self.board.claim_task(task_id, owner_name):
-            return # Someone else got it
+            return
 
         print(f"[{owner_name}] Claimed task {task_id}. Processing independently...")
         task_data = self.board.get_task(task_id)
         
-        # -----------------------------------------------------------------
-        # Real invocation of the Thinned-down graph.py Worker pipeline here
-        # For prototype, we simulate network/LLM delay
-        # -----------------------------------------------------------------
-        from src.agent.graph import run_worker_pipeline
+        # [M5] import 从 reasoning 管线内部
+        from src.reasoning.graph import run_worker_pipeline
         result = await run_worker_pipeline({"task_description": task_data["description"]})
         
         print(f"[{owner_name}] Task {task_id} done. Writing back to Blackboard.")
         self.board.mark_completed(task_id, result)
 
     def _is_all_completed(self) -> bool:
-        """Helper to determine overall completion."""
         keys = self.board.r.keys(f"{self.board.prefix}:task_*")
         if not keys: return False
         
@@ -72,7 +71,6 @@ class SwarmCoordinator:
         return True
 
     def _aggregate_results(self) -> str:
-        """Synthesizer Step - merge all results when finished."""
         out = []
         keys = self.board.r.keys(f"{self.board.prefix}:task_*")
         for key in keys:
@@ -84,20 +82,18 @@ class SwarmCoordinator:
 def handle_complex_query(session_id: str, query: str):
     coordinator = SwarmCoordinator(session_id)
     
-    # 真正的 UltraPlan LLM 交互式输出 (Human-in-the-Loop)
-    from src.agent.ultraplan import UltraPlanner
+    # [M5] import 从 reasoning 管线内部
+    from src.reasoning.planner import UltraPlanner
     planner = UltraPlanner()
     
     plan = planner.interactive_review_and_edit(query)
     
-    # 若在交互门阀中选择了 Cancel，则直接刹车丢弃
     if not plan:
         print("\n[System] Swarm mobilization halted by user decree.")
         return "Operation Cancelled."
     
     task_id_map = {}
     
-    # 构建真实任务黑板，实现无缝拓扑映射
     print("\n[BlackBoard] Engraving tasks into Redis clusters:")
     for t in plan.tasks:
         real_depends_on = [task_id_map[dep] for dep in t.depends_on if dep in task_id_map]
@@ -110,7 +106,6 @@ def handle_complex_query(session_id: str, query: str):
         
     print("\n")
     
-    # Run the swarm with a basic exception cage to map real Claude rolling errors
     try:
         final_output = asyncio.run(coordinator.run())
         print("\n\n==== Swarm Synthesizer Final Result ====\n")

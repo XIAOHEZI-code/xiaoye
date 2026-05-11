@@ -28,7 +28,7 @@ async def background_fork_worker(task_req: ForkRequest):
     """
     This intercepts the Fork sub-agent request and dispatches a background pipeline.
     """
-    from src.core.swarm_workers.fork_worker import dispatch_fork_subagent
+    from src.delivery.fork_worker import dispatch_fork_subagent
     
     await dispatch_fork_subagent(
         task_id=task_req.taskId,

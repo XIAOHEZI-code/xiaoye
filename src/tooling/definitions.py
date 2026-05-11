@@ -1,14 +1,14 @@
-# Agent 工具注册表 — 带渐进式披露 (Progressive Tool Disclosure)
+# Tooling Pipeline — 工具定义注册表 (Progressive Tool Disclosure)
+# [M5 迁移] 从 src/agent/tools.py 迁移至 src/tooling/definitions.py
 # 单一职责：定义所有 LangChain Tool + 注册到 ToolSearchEngine + 提供动态装载接口
-# 修复：使用 BaseTool 替代 @tool 装饰器，解决 LangGraph 1.x 兼容性
 
 from pydantic import BaseModel, Field
 from src.retrieval.semantic_search import SemanticSearchTool
 from src.retrieval.graph_search import GraphLogicTool
 from src.tools.sandbox import get_sandbox
 from src.tools.pdf_cropper import crop_pdf_to_base64_png
-from src.pipeline.image_analyzer import analyze_metallurgy_image_with_context, ImageEvaluationResult
-from src.agent.tool_search import ToolMetadata, get_tool_search_engine
+from src.ingestion.image_analyzer import analyze_metallurgy_image_with_context, ImageEvaluationResult
+from src.tooling.search_engine import ToolMetadata, get_tool_search_engine
 import json
 import os
 

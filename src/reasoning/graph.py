@@ -1,3 +1,14 @@
+"""
+Reasoning Pipeline — Worker ReAct 循环
+
+[M5 迁移] 从 src/agent/graph.py 迁移至 src/reasoning/graph.py
+
+关键重构：
+  - 通过 ToolRegistry 接口获取工具，不再直接 import ALL_TOOLS
+  - 通过 ToolLoader 接口进行环境探测，不再直接 import skill_loader
+  - Reasoning 管线只依赖接口协议，实现与 Tooling 管线的完全解耦
+"""
+
 import asyncio
 from typing import Literal
 from pydantic import BaseModel, Field
@@ -8,8 +19,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langgraph.prebuilt import ToolNode
 
-from src.agent.state import AgentState
-from src.agent.skill_loader import SkillLoader
+from src.reasoning.state import AgentState
 from src.core.config import settings
 
 # ReAct 循环最大迭代次数 — 防止 Evaluator 陷入死循环无限消耗 Token
@@ -38,7 +48,12 @@ def create_worker_graph():
         }
     )
 
-    skill_loader = SkillLoader()
+    # [M5] 通过 ToolRegistry 获取工具，而非直接 import
+    from src.tooling.registry import get_tool_registry
+    from src.tooling.loader import ToolLoader
+
+    registry = get_tool_registry()
+    tool_loader = ToolLoader()
     
     # 1. Researcher Node
     def researcher_node(state: AgentState):
@@ -54,21 +69,19 @@ def create_worker_graph():
             if "EVALUATOR_FEEDBACK" in last_content:
                 feedback = last_content
                 
-        prompt = f"""
-        你是一名底层的检索探测 Worker。你的唯一任务是解决以下特定子任务块。
-        任务指令: '{task_description}'
-        {feedback}
-        请立即调用合适的工具查证所需事实。不要向用户对话，直接调用工具。
-        注意：在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。
-        """
+        sys_prompt = "你是一名底层的检索探测 Worker。不要向用户对话，直接调用工具。"
+        user_prompt = f"任务指令: '{task_description}'\n{feedback}\n请立即调用合适的工具查证所需事实。\n注意：在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。"
 
-        # Claude Pattern: Environmental Heuristic Skill Loading
-        relevant_tools = skill_loader.probe_environment(task_description)
+        # [M5] 通过 ToolLoader 获取工具（它内部使用 ToolRegistry）
+        relevant_tools = tool_loader.probe_environment(task_description)
         dynamic_llm = llm.bind_tools(relevant_tools)
         
+        from langchain_core.messages import SystemMessage, HumanMessage
+        # 确保以 HumanMessage 结尾，避免大模型 API 报错
+        msgs_to_send = [SystemMessage(content=sys_prompt)] + state["messages"][1:] + [HumanMessage(content=user_prompt)]
+        
         # 使用非流式调用以确保 tool_calls 参数正确传递
-        # 流式调用时部分模型可能不返回完整的 tool_call 参数
-        response = dynamic_llm.invoke([SystemMessage(content=prompt)] + state["messages"][1:])
+        response = dynamic_llm.invoke(msgs_to_send)
         
         # 提取 response 和 tool_calls
         response_text = response.content if hasattr(response, 'content') else str(response)
@@ -125,10 +138,9 @@ def create_worker_graph():
         )
         
         if not has_tool_calls and not observations:
-            # 没有调用工具，也没有检索结果，说明任务不需要检索（如问候语）
             return {"step_satisfied": True, "loop_count": current_loop}
         
-        # 循环兜底：达到最大次数时强制认为满足，避免 Token 无限消耗
+        # 循环兜底
         if current_loop >= MAX_REACT_LOOPS:
             print(f"[Evaluator] ⚠️ Max iterations ({MAX_REACT_LOOPS}) reached, forcing completion.")
             return {"step_satisfied": True, "loop_count": current_loop}
@@ -145,7 +157,8 @@ def create_worker_graph():
         updates = {"step_satisfied": eval_obj.is_satisfied, "loop_count": current_loop}
         
         if not eval_obj.is_satisfied:
-            updates["messages"] = [AIMessage(content=f"EVALUATOR_FEEDBACK (loop {current_loop}/{MAX_REACT_LOOPS}): {eval_obj.feedback}")]
+            from langchain_core.messages import HumanMessage
+            updates["messages"] = [HumanMessage(content=f"EVALUATOR_FEEDBACK (loop {current_loop}/{MAX_REACT_LOOPS}): {eval_obj.feedback}")]
             
         return updates
 
@@ -161,10 +174,9 @@ def create_worker_graph():
             return "__end__"
         return "researcher"
 
-    # Worker relies on a super-set of all loaded tools node (LangGraph requirement)
-    from src.agent.tools import ALL_TOOLS
-    # Researcher only binds what is needed dynamically, but ToolNode needs all possible tools
-    tool_node = ToolNode(ALL_TOOLS)
+    # [M5] 通过 ToolRegistry 获取全量工具，ToolNode 需要
+    all_tools = registry.get_all_tools()
+    tool_node = ToolNode(all_tools)
 
     workflow = StateGraph(AgentState)
     workflow.add_node("researcher", researcher_node)

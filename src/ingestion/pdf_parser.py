@@ -12,7 +12,7 @@ import subprocess
 import glob
 from typing import Tuple, List, Optional
 from src.models.chunk_document import ChunkDocument
-from src.pipeline.figure_extractor import (
+from src.ingestion.figure_extractor import (
     extract_figures_from_markdown,
     FigureInfo,
     is_figure_item,
@@ -286,7 +286,7 @@ def _analyze_figures_with_vlm(
         经 VLM 分析后的 Image ChunkDocument 列表
     """
     from src.models.chunk_document import make_image_chunk
-    from src.pipeline.image_analyzer import analyze_metallurgy_image_with_context
+    from src.ingestion.image_analyzer import analyze_metallurgy_image_with_context
     import base64
 
     chunks = []

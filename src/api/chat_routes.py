@@ -34,15 +34,11 @@ async def background_chat_worker(req: ChatRequest, doc_status: str = "knowledge_
     """
     import redis.asyncio as redis
     from src.core.config import settings
-    from src.core.swarm_workers.chat_worker import dispatch_chat_worker
+    from src.delivery.chat_worker import dispatch_chat_worker
+    from src.delivery.session import SessionManager
 
-    redis_client = redis.from_url(settings.CELERY_BROKER_URL)
-
-    # 读取对话历史
-    history_key = f"xiaoye:chat:{req.task_id}:history"
-    async with redis_client as r:
-        raw_history = await r.get(history_key)
-        history = json.loads(raw_history) if raw_history else []
+    session_manager = SessionManager()
+    history = await session_manager.get_history(req.task_id)
 
     await dispatch_chat_worker(
         task_id=req.task_id,

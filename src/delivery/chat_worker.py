@@ -16,7 +16,7 @@ import json
 import os
 import redis.asyncio as redis
 from src.core.config import settings
-from src.core.memory_engine import load_preload_context, extract_and_save_memory, init_global_memory
+from src.delivery.memory import load_preload_context, extract_and_save_memory, init_global_memory
 from src.api.askuser_routes import trigger_ask_user, wait_for_user_reply
 
 
@@ -51,6 +51,8 @@ async def dispatch_chat_worker(
     redis_client = redis.from_url(settings.CELERY_BROKER_URL)
 
     async with redis_client as r:
+        from src.delivery.sse_channel import get_sse_channel
+        sse = get_sse_channel()
 
         # ── Step 0: 从硬盘态记忆加载历史上下文 ────────────────────────────────
         memory_context = load_preload_context(task_id, document_id)
@@ -74,61 +76,50 @@ async def dispatch_chat_worker(
                     )
                     reply = await wait_for_user_reply(ask_id, timeout=120)
                     if reply != "yes":
-                        await r.publish(
-                            "xiaoye_sse",
-                            json.dumps({
-                                "task_id": task_id,
-                                "patch": "\n> ⛔ **用户已取消操作。**\n\n---\n",
-                            }),
+                        await sse.async_publish_chat_patch(
+                            task_id=task_id,
+                            patch="\n> ⛔ **用户已取消操作。**\n\n---\n"
                         )
                         return
-                    await r.publish(
-                        "xiaoye_sse",
-                        json.dumps({
-                            "task_id": task_id,
-                            "patch": "\n> ✅ **用户已确认，继续执行...**\n\n",
-                        }),
+                    await sse.async_publish_chat_patch(
+                        task_id=task_id,
+                        patch="\n> ✅ **用户已确认，继续执行...**\n\n"
                     )
                 except Exception as ask_err:
                     print(f"[ChatWorker] AskUser safety gate failed (non-fatal): {ask_err}")
 
             # ── Step 2b: 文献检索 ────────────────────────────────────────────
-            await r.publish(
-                "xiaoye_sse",
-                json.dumps({
-                    "task_id": task_id,
-                    "patch": "\n> 🔍 **正在检索知识库...**（`search_metallurgy_text`）\n",
-                }),
+            await sse.async_publish_chat_patch(
+                task_id=task_id,
+                patch="\n> 🔍 **正在检索知识库...**（`search_metallurgy_text`）\n"
             )
             try:
-                from src.agent.tools import search_metallurgy_text
-                results_str = search_metallurgy_text(message, top_k=3)
-                if results_str and "No relevant" not in results_str:
-                    retrieved_context = results_str
-                    # 通知前端检索到了内容
-                    await r.publish(
-                        "xiaoye_sse",
-                        json.dumps({
-                            "task_id": task_id,
-                            "patch": "> ✅ **找到相关文献片段，正在综合分析...**\n\n",
-                        }),
-                    )
+                # [M5] 通过 ToolRegistry 获取工具，不再硬编码依赖 agent/tools.py
+                from src.tooling.registry import get_tool_registry
+                registry = get_tool_registry()
+                all_tools = registry.get_all_tools()
+                search_tool = next((t for t in all_tools if t.name == "search_metallurgy_text"), None)
+                
+                if search_tool:
+                    results_str = search_tool.invoke({"query": message, "top_k": 3})
+                    if results_str and "No relevant" not in results_str:
+                        retrieved_context = results_str
+                        await sse.async_publish_chat_patch(
+                            task_id=task_id,
+                            patch="> ✅ **找到相关文献片段，正在综合分析...**\n\n"
+                        )
+                    else:
+                        await sse.async_publish_chat_patch(
+                            task_id=task_id,
+                            patch="> ℹ️ **知识库暂无相关文献，使用通用冶金知识回答**\n\n"
+                        )
                 else:
-                    await r.publish(
-                        "xiaoye_sse",
-                        json.dumps({
-                            "task_id": task_id,
-                            "patch": "> ℹ️ **知识库暂无相关文献，使用通用冶金知识回答**\n\n",
-                        }),
-                    )
+                    raise Exception("Tool 'search_metallurgy_text' not found in registry")
             except Exception as e:
                 # 检索失败不阻断流程，降级为通用回答
-                await r.publish(
-                    "xiaoye_sse",
-                    json.dumps({
-                        "task_id": task_id,
-                        "patch": f"> ⚠️ 检索服务暂时不可用（{type(e).__name__}），使用通用知识回答\n\n",
-                    }),
+                await sse.async_publish_chat_patch(
+                    task_id=task_id,
+                    patch=f"> ⚠️ 检索服务暂时不可用（{type(e).__name__}），使用通用知识回答\n\n"
                 )
 
         # ── Step 3: 构建 Prompt ────────────────────────────────────────────────
@@ -206,20 +197,14 @@ async def dispatch_chat_worker(
             async for chunk in llm.astream(messages):
                 if chunk.content:
                     full_response += chunk.content
-                    await r.publish(
-                        "xiaoye_sse",
-                        json.dumps({
-                            "task_id": task_id,
-                            "patch": chunk.content,
-                        }),
+                    await sse.async_publish_chat_patch(
+                        task_id=task_id,
+                        patch=chunk.content
                     )
         except Exception as e:
-            await r.publish(
-                "xiaoye_sse",
-                json.dumps({
-                    "task_id": task_id,
-                    "patch": f"\n\n**[LLM 错误]** {type(e).__name__}: {str(e)}\n",
-                }),
+            await sse.async_publish_chat_patch(
+                task_id=task_id,
+                patch=f"\n\n**[LLM 错误]** {type(e).__name__}: {str(e)}\n"
             )
             return
 
@@ -242,9 +227,6 @@ async def dispatch_chat_worker(
         except Exception as mem_err:
             print(f"[ChatWorker] Memory save failed (non-fatal): {mem_err}")
 
-        await r.publish(
-            "xiaoye_sse",
-            json.dumps({"task_id": task_id, "patch": "\n\n---\n"}),
-        )
+        await sse.async_publish_chat_patch(task_id=task_id, patch="\n\n---\n")
 
         print(f"[ChatWorker] task={task_id} completed. mode={'vlm' if vlm_context else 'rag' if retrieved_context else 'general'}")
