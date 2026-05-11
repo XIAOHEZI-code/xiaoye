@@ -162,11 +162,11 @@ def create_worker_graph():
         return updates
 
     # 4. Routing
-    def route_research_or_eval(state: AgentState) -> Literal["tools", "evaluator"]:
+    def route_research_or_eval(state: AgentState) -> Literal["tools", "__end__"]:
         last_message = state["messages"][-1]
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tools"
-        return "evaluator"
+        return "__end__"
         
     def route_evaluator_loop(state: AgentState) -> Literal["researcher", "__end__"]:
         if state["step_satisfied"]:
