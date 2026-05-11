@@ -25,9 +25,9 @@
 ## 🎯 Phase 3: 架构精简与废弃代码清理
 目标：清理历史包袱，减轻后续 M6 开发（可视化图表、多租户等）的认知负担。
 
-- [ ] **停用与隔离遗留调试文件**：建立 `_archive/` 文件夹，将根目录下废弃的测试脚本（如 `test_e2e_pipeline.py`, `scratch_test.py` 等）移入归档。
-- [ ] **评估废弃子模块**：检查并可能废弃 `src/reasoning/coordinator.py` 和 `src/reasoning/planner.py`，让单体 `WorkerGraph` 成为唯一的思考中枢，以减少不必要的 Swarm 调度复杂度。
-- [ ] **提交 Git Baseline**：跑通全链路测试，生成稳定的代码基线。
+- [x] **停用与隔离遗留调试文件**：建立 `_archive/` 文件夹，将根目录下废弃的测试脚本（如 `test_e2e_pipeline.py`, `scratch_test.py` 等）移入归档。
+- [x] **评估废弃子模块**：检查并可能废弃 `src/reasoning/coordinator.py` 和 `src/reasoning/planner.py`，让单体 `WorkerGraph` 成为唯一的思考中枢，以减少不必要的 Swarm 调度复杂度。
+- [x] **提交 Git Baseline**：跑通全链路测试，生成稳定的代码基线。
 
 ---
 *注：此计划将优先于原定的前端可视化沙盒进度执行，因为它是整个平台真正具备“科研助理”智能的神经中枢。*
