@@ -48,7 +48,6 @@ env/
 
 # Logs
 *.log
-logs/
 
 # Database
 *.db
@@ -108,3 +107,8 @@ run_m1_test.py
 
 # Document directory (drawio / docx binaries)
 document/
+
+# Project documentation folders (explicitly tracked)
+!日志信息/
+!架构设计/
+!工作日报/
