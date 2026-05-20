@@ -9,9 +9,13 @@ import { useToast } from './components/Toast';
 import { KnowledgeGraphViewer } from './components/KnowledgeGraphViewer';
 import { Network } from 'lucide-react';
 
-// localStorage 布局持久化键
-const LAYOUT_KEY = 'xiaoye_layout_v1';
-const DEFAULT_LAYOUT = { leftWidth: 35, rightWidth: 20 };
+// localStorage 持久化键
+const LAYOUT_KEY = 'xiaoye_layout_v2';  // v2: 调整右栏默认宽度
+const NOTEBOOK_KEY = 'xiaoye_notebook_v1';
+const THINKING_KEY = 'xiaoye_thinking_v1';
+const SESSION_ID_KEY = 'xiaoye_session_id_v1';
+const DEFAULT_LAYOUT = { leftWidth: 33, rightWidth: 24 };
+const DEFAULT_NOTEBOOK = '# 工作台\n\n欢迎使用小冶冶金智慧文献服务平台。在左侧载入 PDF 文献，圈选区域并右键触发深入分析...';
 
 function loadLayout() {
   try {
@@ -20,6 +24,35 @@ function loadLayout() {
   } catch { }
   return DEFAULT_LAYOUT;
 }
+
+function loadNotebook(): string {
+  try {
+    const saved = localStorage.getItem(NOTEBOOK_KEY);
+    if (saved) return saved;
+  } catch { }
+  return DEFAULT_NOTEBOOK;
+}
+
+function loadThinking(): string {
+  try {
+    return localStorage.getItem(THINKING_KEY) || '';
+  } catch { }
+  return '';
+}
+
+function loadSessionId(): string {
+  try {
+    return localStorage.getItem(SESSION_ID_KEY) || 'default_session';
+  } catch { }
+  return 'default_session';
+}
+
+export type ChatSession = {
+  task_id: string;
+  message_count: number;
+  preview: string;
+  last_user_msg: string;
+};
 
 
 export type BoundingBox = {
@@ -53,8 +86,8 @@ function App() {
   const { showToast } = useToast();
   const [activeTasks, setActiveTasks] = useState<TaskEvent[]>([]);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
-  const [notebookContent, setNotebookContent] = useState<string>('# 工作台\n\n欢迎使用小冶冶金智慧文献服务平台。在左侧载入 PDF 文献，圈选区域并右键触发深入分析...');
-  const [thinkingContent, setThinkingContent] = useState<string>(''); // 思维链内容
+  const [notebookContent, setNotebookContent] = useState<string>(loadNotebook);
+  const [thinkingContent, setThinkingContent] = useState<string>(loadThinking);
   const [documents, setDocuments] = useState<{ id: string, filename: string, status: string, created_at: string | null }[]>([]);
   const [knowledgeDocId, setKnowledgeDocId] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -64,6 +97,8 @@ function App() {
   const [pdfSourceType, setPdfSourceType] = useState<'uploaded' | 'retrieved'>('uploaded');
   const [showGraph, setShowGraph] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(loadSessionId);
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -89,6 +124,19 @@ function App() {
       localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftWidth, rightWidth }));
     }
   }, [leftWidth, rightWidth, leftCollapsed, rightCollapsed]);
+
+  // 持久化 notebook 内容到 localStorage
+  useEffect(() => {
+    localStorage.setItem(NOTEBOOK_KEY, notebookContent);
+  }, [notebookContent]);
+
+  useEffect(() => {
+    localStorage.setItem(THINKING_KEY, thinkingContent);
+  }, [thinkingContent]);
+
+  useEffect(() => {
+    localStorage.setItem(SESSION_ID_KEY, currentSessionId);
+  }, [currentSessionId]);
 
   const handleLeftDrag = useCallback((dx: number) => {
     if (!containerRef.current) return;
@@ -139,7 +187,7 @@ function App() {
   // 计算实际宽度（折叠时为 0）
   const effectiveLeft = leftCollapsed ? 0 : leftWidth;
   const effectiveRight = rightCollapsed ? 0 : rightWidth;
-  const effectiveMiddle = 100 - effectiveLeft - effectiveRight;
+  // effectiveMiddle 不再需要 — 中栏使用 flex:1 自动填充
 
   // Setup Server-Sent Events (SSE) Listener
   useEffect(() => {
@@ -210,9 +258,68 @@ function App() {
     }
   };
 
+  // 加载对话会话列表
+  const fetchChatSessions = async () => {
+    try {
+      const res = await fetch('/api/v1/chat/sessions');
+      const data = await res.json();
+      if (data.sessions) setChatSessions(data.sessions);
+    } catch {
+      // 静默失败
+    }
+  };
+
   useEffect(() => {
     fetchDocuments();
+    fetchChatSessions();
   }, []);
+
+  // 新建对话
+  const handleNewSession = () => {
+    const newId = `session_${Date.now()}`;
+    // 保存当前对话到 localStorage（按 session_id 隔离）
+    localStorage.setItem(`xiaoye_nb_${currentSessionId}`, notebookContent);
+    localStorage.setItem(`xiaoye_tk_${currentSessionId}`, thinkingContent);
+    // 切换到新会话
+    setCurrentSessionId(newId);
+    setNotebookContent(DEFAULT_NOTEBOOK);
+    setThinkingContent('');
+    showToast('已创建新对话', 'success', 2000);
+  };
+
+  // 切换对话
+  const handleSwitchSession = (taskId: string) => {
+    if (taskId === currentSessionId) return;
+    // 保存当前对话
+    localStorage.setItem(`xiaoye_nb_${currentSessionId}`, notebookContent);
+    localStorage.setItem(`xiaoye_tk_${currentSessionId}`, thinkingContent);
+    // 加载目标对话
+    const savedNb = localStorage.getItem(`xiaoye_nb_${taskId}`);
+    const savedTk = localStorage.getItem(`xiaoye_tk_${taskId}`);
+    setCurrentSessionId(taskId);
+    setNotebookContent(savedNb || DEFAULT_NOTEBOOK);
+    setThinkingContent(savedTk || '');
+  };
+
+  // 删除对话
+  const handleDeleteSession = async (taskId: string) => {
+    try {
+      await fetch(`/api/v1/chat/sessions/${taskId}`, { method: 'DELETE' });
+      // 清理 localStorage
+      localStorage.removeItem(`xiaoye_nb_${taskId}`);
+      localStorage.removeItem(`xiaoye_tk_${taskId}`);
+      // 如果删的是当前对话，切换到新对话
+      if (taskId === currentSessionId) {
+        setCurrentSessionId('default_session');
+        setNotebookContent(DEFAULT_NOTEBOOK);
+        setThinkingContent('');
+      }
+      showToast('对话已删除', 'info', 2000);
+      fetchChatSessions();
+    } catch {
+      showToast('删除失败', 'error');
+    }
+  };
 
   const handleForkTask = async (taskId: string, documentId: string, type: string, bbox: BoundingBox) => {
     const newTask: TaskEvent = {
@@ -244,7 +351,7 @@ function App() {
 
   const handleUserChat = async (message: string, deepMode: boolean) => {
     const docId = currentDocumentId || null;
-    const taskId = "default_session";
+    const taskId = currentSessionId;
 
     // 立即显示用户消息，加占位符
     setNotebookContent(prev => prev + `\n\n---\n**\ud83d\udc64 \u60a8:** ${message}\n\n*\u2026小冶思考中...*\n`);
@@ -268,6 +375,8 @@ function App() {
         const err = await res.json().catch(() => ({}));
         showToast(err.detail || '对话请求失败', 'error');
       }
+      // 对话发送后刷新会话列表
+      setTimeout(fetchChatSessions, 3000);
     } catch (err) {
       showToast('后端未启动，无法发送消息。请先启动 FastAPI 服务', 'error');
     }
@@ -378,11 +487,11 @@ function App() {
           onCollapse={handleCollapseLeft}
         />
 
-        {/* 中栏：AI 助手 */}
+        {/* 中栏：AI 助手 — flex:1 自动填充剩余空间 */}
         <div
           className="glass-panel"
           style={{
-            flex: `0 0 ${effectiveMiddle}%`,
+            flex: 1,
             minWidth: '200px',
             display: 'flex',
             flexDirection: 'column',
@@ -450,7 +559,7 @@ function App() {
           className="glass-panel"
           style={{
             flex: rightCollapsed ? '0 0 0px' : `0 0 ${effectiveRight}%`,
-            minWidth: rightCollapsed ? 0 : '150px',
+            minWidth: rightCollapsed ? 0 : '220px',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
@@ -480,6 +589,11 @@ function App() {
               setPdfSourceType('retrieved');
               setCurrentDocumentId(docId);
             }}
+            chatSessions={chatSessions}
+            currentSessionId={currentSessionId}
+            onNewSession={handleNewSession}
+            onSwitchSession={handleSwitchSession}
+            onDeleteSession={handleDeleteSession}
           />
           <ForkManager tasks={activeTasks} style={{ marginTop: '12px' }} />
         </div>

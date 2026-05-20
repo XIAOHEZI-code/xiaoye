@@ -312,6 +312,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
               <Page 
                 pageNumber={pageNumber} 
                 scale={scale} 
+                devicePixelRatio={Math.max(window.devicePixelRatio || 1, 2)}
                 renderTextLayer={true} 
                 renderAnnotationLayer={true}
                 loading={<div style={{ padding: '20px', color: 'var(--text-muted)' }}>页面渲染中...</div>}

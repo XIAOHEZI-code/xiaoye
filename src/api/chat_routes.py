@@ -93,3 +93,71 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
         "message": "对话已提交，Agent 正在检索与思考...",
         "mode": doc_status,
     }
+
+
+@router.get("/chat/sessions")
+async def list_chat_sessions():
+    """
+    列出所有存储在 Redis 中的对话会话。
+    扫描 xiaoye:chat:*:history 键，返回会话列表和摘要。
+    """
+    import redis.asyncio as redis
+    from src.core.config import settings
+
+    try:
+        rc = redis.from_url(settings.CELERY_BROKER_URL)
+        async with rc as r:
+            keys = []
+            async for key in r.scan_iter(match="xiaoye:chat:*:history"):
+                keys.append(key.decode("utf-8") if isinstance(key, bytes) else key)
+
+            sessions = []
+            for key in keys:
+                # 提取 task_id: xiaoye:chat:{task_id}:history
+                parts = key.split(":")
+                if len(parts) >= 4:
+                    task_id = parts[2]
+                else:
+                    continue
+
+                raw = await r.get(key)
+                if not raw:
+                    continue
+
+                history = json.loads(raw)
+                if not history:
+                    continue
+
+                # 取最后一条对话作为预览
+                last_entry = history[-1]
+                preview = last_entry.get("user", "")[:60]
+
+                sessions.append({
+                    "task_id": task_id,
+                    "message_count": len(history),
+                    "preview": preview,
+                    "last_user_msg": last_entry.get("user", "")[:100],
+                })
+
+            return {"sessions": sessions, "total": len(sessions)}
+    except Exception as e:
+        logger.error(f"Failed to list chat sessions: {e}")
+        return {"sessions": [], "total": 0}
+
+
+@router.delete("/chat/sessions/{task_id}")
+async def delete_chat_session(task_id: str):
+    """删除指定的对话会话（Redis 中的历史 + VLM 上下文）"""
+    import redis.asyncio as redis
+    from src.core.config import settings
+
+    try:
+        rc = redis.from_url(settings.CELERY_BROKER_URL)
+        async with rc as r:
+            await r.delete(f"xiaoye:chat:{task_id}:history")
+            await r.delete(f"xiaoye:chat:{task_id}")
+        return {"status": "deleted", "task_id": task_id}
+    except Exception as e:
+        logger.error(f"Failed to delete session {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

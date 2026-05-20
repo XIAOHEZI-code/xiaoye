@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, RefreshCw, Upload, Loader } from 'lucide-react';
+import { FileText, RefreshCw, Upload, Loader, MessageSquare, Plus, Trash2 } from 'lucide-react';
 import { useToast } from './Toast';
-import type { RetrievalSource } from '../App';
+import type { RetrievalSource, ChatSession } from '../App';
 
 interface Document {
   id: string;
@@ -18,6 +18,11 @@ interface Props {
   onDocumentUploaded?: (docId: string) => void;
   retrievalSources?: RetrievalSource[];           // AI 检索命中的文献
   onRetrievedSelect?: (docId: string) => void;    // 点击检索文献的回调
+  chatSessions?: ChatSession[];
+  currentSessionId?: string;
+  onNewSession?: () => void;
+  onSwitchSession?: (taskId: string) => void;
+  onDeleteSession?: (taskId: string) => void;
 }
 
 const STATUS_MAP: Record<string, { color: string; label: string }> = {
@@ -26,7 +31,11 @@ const STATUS_MAP: Record<string, { color: string; label: string }> = {
   failed:  { color: 'var(--status-error)',   label: '失败' },
 };
 
-const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, onDocumentUploaded, retrievalSources, onRetrievedSelect }) => {
+const Sidebar: React.FC<Props> = ({
+  documents, selectedId, onSelect, onRefresh, onDocumentUploaded,
+  retrievalSources, onRetrievedSelect,
+  chatSessions, currentSessionId, onNewSession, onSwitchSession, onDeleteSession,
+}) => {
   const { showToast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,6 +107,21 @@ const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, 
     }
   };
 
+  const formatSessionId = (taskId: string) => {
+    if (taskId === 'default_session') return '默认会话';
+    if (taskId.startsWith('session_')) {
+      const ts = parseInt(taskId.replace('session_', ''));
+      if (!isNaN(ts)) {
+        return new Date(ts).toLocaleString('zh-CN', {
+          month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        });
+      }
+    }
+    // 截断显示
+    return taskId.length > 12 ? taskId.slice(0, 12) + '…' : taskId;
+  };
+
   return (
     <div style={{
       height: '100%',
@@ -108,6 +132,9 @@ const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, 
       border: '1px solid var(--glass-border)',
       overflow: 'hidden',
     }}>
+      {/* ================================================================
+          知识库区域
+          ================================================================ */}
       {/* 头部 — 统一 48px 高度 */}
       <div style={{
         height: '48px',
@@ -183,7 +210,7 @@ const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, 
       </div>
 
       {/* 文档列表 */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px', minHeight: 0 }}>
         {documents.length === 0 ? (
           <div style={{
             padding: '24px 12px',
@@ -323,6 +350,171 @@ const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, 
           ))}
         </div>
       )}
+
+      {/* ================================================================
+          对话记录区域
+          ================================================================ */}
+      <div style={{
+        borderTop: '1px solid var(--glass-border)',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '120px',
+        maxHeight: '260px',
+      }}>
+        {/* 对话记录头部 */}
+        <div style={{
+          height: '40px',
+          minHeight: '40px',
+          padding: '0 14px',
+          borderBottom: '1px solid var(--glass-border)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontWeight: 600,
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '0.82rem',
+          }}>
+            <MessageSquare size={14} />
+            对话记录 ({chatSessions?.length || 0})
+          </span>
+          <button
+            onClick={onNewSession}
+            title="新建对话"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--accent)',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.opacity = '0.7')}
+            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {/* 会话列表 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px', minHeight: 0 }}>
+          {(!chatSessions || chatSessions.length === 0) ? (
+            <div style={{
+              padding: '16px 8px',
+              textAlign: 'center',
+              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+            }}>
+              <MessageSquare size={20} style={{ opacity: 0.3, marginBottom: '6px' }} />
+              <div>暂无对话记录</div>
+              <div style={{ fontSize: '0.68rem', opacity: 0.6, marginTop: '2px' }}>
+                发送消息后自动保存
+              </div>
+            </div>
+          ) : (
+            chatSessions.map((session) => {
+              const isActive = session.task_id === currentSessionId;
+              return (
+                <div
+                  key={session.task_id}
+                  onClick={() => onSwitchSession?.(session.task_id)}
+                  style={{
+                    padding: '8px 10px',
+                    marginBottom: '3px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    background: isActive ? 'var(--accent-light)' : 'transparent',
+                    border: isActive
+                      ? '1px solid var(--accent)'
+                      : '1px solid transparent',
+                    transition: 'all 0.15s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                  onMouseEnter={e => {
+                    if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+                  }}
+                  onMouseLeave={e => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent';
+                  }}
+                >
+                  <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      marginBottom: '3px',
+                    }}>
+                      <MessageSquare size={11} style={{
+                        color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                        flexShrink: 0,
+                      }} />
+                      <span style={{
+                        fontSize: '0.78rem',
+                        color: isActive ? 'var(--accent)' : 'var(--text-primary)',
+                        fontWeight: isActive ? 600 : 400,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {formatSessionId(session.task_id)}
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: '0.68rem',
+                      color: 'var(--text-muted)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      paddingLeft: '16px',
+                    }}>
+                      {session.preview || '空对话'} · {session.message_count} 条
+                    </div>
+                  </div>
+                  {/* 删除按钮 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteSession?.(session.task_id);
+                    }}
+                    title="删除此对话"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '3px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      opacity: 0.4,
+                      transition: 'opacity 0.15s, color 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.color = 'var(--status-error)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.opacity = '0.4';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 };

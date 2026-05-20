@@ -360,6 +360,16 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
             # Stream LLM token output
             if kind == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
+
+                # ── 分离思维链 (thinking) 与正文 (content) ──
+                # qwen-max 在 deep_mode 下会返回 chunk.thinking 字段
+                if hasattr(chunk, "thinking") and chunk.thinking:
+                    await sse.async_publish("reasoning", {
+                        "task_id": task_id,
+                        "type": "reasoning",
+                        "thinking": chunk.thinking,
+                    })
+
                 if hasattr(chunk, "content") and chunk.content:
                     final_output += chunk.content
                     await sse.async_publish_chat_patch(task_id, chunk.content)
