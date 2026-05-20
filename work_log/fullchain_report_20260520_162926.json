@@ -1,0 +1,1361 @@
+{
+  "config": {
+    "model": "qwen-max",
+    "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "timestamp_utc": "2026-05-20T08:40:39.215402+00:00",
+    "active_layers": [
+      "chat_pipeline",
+      "es_search",
+      "graph_search",
+      "hyde_search"
+    ],
+    "timeouts": {
+      "layer": 120,
+      "chat": 180
+    }
+  },
+  "test_cases": [
+    {
+      "id": "Q1",
+      "name": "事实检索 - 疲劳极限数值提取",
+      "query": "304/45双金属复合螺栓在冷加工态和调质态下的疲劳极限分别是多少？请引用具体数值和来源页码。",
+      "layers": {
+        "es_search": {
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_9e7894684c1a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "\n\n![](_page_4_Figure_3.jpeg)\n\n图 3 螺栓螺牙金相显微组织照片\n\nFig.3 Metallographic microstructure images of bolt threads\n\n![](_page_4_Figure_6.jpeg)\n\n图 4 螺栓螺牙硬度分布曲线\nFig.4 Hardness distribution curve of bolt threads...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03252247488101534,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03252247488101534,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03125763125763126,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_56d4a5f5ab1d",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "耐蚀性能略有下降。调\n\n![](_page_6_Figure_3.jpeg)\n\n图 8 冷加工态和调质态 304/45 钢复合螺栓疲劳断口的 SEM 照片\n\nFig.8 SEM images of fatigue fracture of cold-worked and tempered 304/45 steel composite bolts\n\n![](_page_6_Figure_6.jpeg)...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03036576949620428,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_765d9378deed",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "用消失,使得调质态 304/45 钢复合螺栓的硬度及疲劳性能远不如冷加工态 304/45 钢复合螺栓。\n\n- 2)冷加工态 304/45 钢复合螺栓基本保持了 304 不锈钢螺栓优秀的耐蚀性能,调质处理后由于 敏化作用加重,导致调质态 304/45 钢复合螺栓耐蚀 性能大幅度下降。\n- 3)冷加工态 304/45 钢复合螺栓不仅具有优异的疲劳性能,同时还具有较好的耐蚀性能。\n\n#### 参考文献:...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.029910714285714284,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 707,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 3,
+          "entities_found": [
+            "304不锈钢螺栓",
+            "45钢",
+            "疲劳性能"
+          ],
+          "relations": [
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "瞬断区 (Structure)",
+              "mechanism": "当外加载荷超过材料极限强度时, 导致材料快速断裂。",
+              "context": "35K碳钢和304不锈钢螺栓疲劳断口",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "疲劳裂纹扩展区 (Structure)",
+              "mechanism": "在受力过程中, 螺栓内部的微观组织变化导致了裂纹的形成和扩展。",
+              "context": "35K碳钢和304不锈钢螺栓疲劳断口",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_PROPERTY",
+              "object": "疲劳裂纹扩展阻力 (Property)",
+              "mechanism": "材料内部结构对裂纹扩展的影响",
+              "context": "疲劳裂纹扩展时受到的阻力更大",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "韧窝 (Structure)",
+              "mechanism": "塑性变形导致的微观组织特征",
+              "context": "瞬断区",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "纤维状奥氏体晶粒 (Structure)",
+              "mechanism": "冷滚丝挤压变形作用",
+              "context": "螺牙部位",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "PROCESSED_BY",
+              "object": "旋转弯曲疲劳试验 (Process)",
+              "mechanism": "通过旋转弯曲疲劳试验来评估材料的耐久性",
+              "context": "对304不锈钢螺栓进行旋转弯曲疲劳试验",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "45钢 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "黑色块状珠光体 (Structure)",
+              "mechanism": "原始材料中存在的相",
+              "context": "45 钢微观组织可见白色网状铁素体和黑色块状珠光体",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "45钢 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "白色网状铁素体 (Structure)",
+              "mechanism": "原始材料中存在的相",
+              "context": "45 钢微观组织可见白色网状铁素体和黑色块状珠光体",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "45钢 (Material)",
+              "relation": "HAS_PROPERTY",
+              "object": "强度 (Property)",
+              "mechanism": "通过增加碳含量来提高材料的强度。",
+              "context": "芯材选用比35K碳钢强度更高的45钢",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            }
+          ],
+          "paths": [
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "旋转弯曲疲劳试验"
+              ],
+              "relations": [
+                "PROCESSED_BY"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "纤维状奥氏体晶粒"
+              ],
+              "relations": [
+                "HAS_STRUCTURE"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "韧窝"
+              ],
+              "relations": [
+                "HAS_STRUCTURE"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "疲劳裂纹扩展阻力"
+              ],
+              "relations": [
+                "HAS_PROPERTY"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "疲劳裂纹扩展区"
+              ],
+              "relations": [
+                "HAS_STRUCTURE"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "疲劳裂纹扩展区",
+                "断口平坦度"
+              ],
+              "relations": [
+                "HAS_STRUCTURE",
+                "DEGRADES"
+              ]
+            },
+            {
+              "nodes": [
+                "304不锈钢螺栓",
+                "瞬断区"
+              ],
+              "relations": [
+                "HAS_STRUCTURE"
+              ]
+            }
+          ],
+          "time_ms": 11,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304/45双金属",
+            "双金属复合螺栓",
+            "疲劳极限",
+            "冷加工",
+            "疲劳",
+            "调质"
+          ],
+          "hyde_preview": "",
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03278688524590164,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_9e7894684c1a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "\n\n![](_page_4_Figure_3.jpeg)\n\n图 3 螺栓螺牙金相显微组织照片\n\nFig.3 Metallographic microstructure images of bolt threads\n\n![](_page_4_Figure_6.jpeg)\n\n图 4 螺栓螺牙硬度分布曲线\nFig.4 Hardness distribution curve of bolt threads...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03200204813108039,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d63855309a5c",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "部的纤维状流线分布特征,进一步延长了疲劳裂纹的萌生时间,提高了冷加工态 304/45 钢复合螺栓的疲劳强度和寿命。\n\n#### 2.2.2 疲劳断口宏观形貌分析\n\n螺栓疲劳断口宏观形貌照片见图 6。从图 6 可以看出:螺栓疲劳断口分为 3 个区域(疲劳裂纹源区、疲劳裂纹扩展区和瞬断区)。在该疲劳试验过程中发现:疲劳裂纹源区大多处于螺栓与夹具螺母接触的第一根螺纹的根部,裂纹源区可以看到闪光的小刻面。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03055037313432836,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_09be84f7e16b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "织倾向。在冷加工态 304/45 钢复合螺栓中,45 钢芯材同样由白色网状铁素体和黑色块状珠光体组成,但由于复合棒料高温热轧过程的作用,晶粒发生长大粗化,晶粒度为 8 级,且产生魏氏组织倾向较为严重,存在过热现象。调质处理后,芯材组织为回火索氏体。35K 碳钢螺栓由于含碳量较低,珠光体含量降低,由白色块状铁素体和黑色条状珠光体组成,晶粒度为 11 级。\n\n螺栓螺牙部位的微观组织如图 3 所示。从图...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.030158730158730156,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 24838,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "根据[来源: test.pdf, p.4]的数据显示，304/45双金属复合螺栓在冷加工态和调质态下的疲劳极限分别是240 MPa和85 MPa。具体来说，在最大表面弯曲应力中点值为300 MPa的情况下，冷加工态304/45钢复合螺栓的疲劳断裂循环次数为30.4万次，而调质态304/45钢复合螺栓的疲劳断裂循环次数为1.1万次。\n\n从这些数据可以看出，冷加工态304/45钢复合螺栓的疲劳强度远高于调质态304/45钢复合螺栓。这种差异主要是由于不锈钢覆层的冷变形强化作用以及不锈钢侧近界面处碳化物的析出，这些因素提高了冷加工态304/45钢复合螺栓中不锈钢覆层的硬度。此外，螺牙根部的纤维状流线分布特征也进一步延长了疲劳裂纹的萌生时间，从而提高了冷加工态304/45钢复合螺栓的疲劳强度和寿命。\n\n相比之下，调质处理后的304/45钢复合螺栓覆层硬度、疲劳性能和耐蚀性能都大幅度下降。这可能是由于调质处理过程中晶间敏化程度增加，导致材料的耐蚀性能变差，进而影响其疲劳性能。\n\n综上所述，冷加工态304/45钢复合螺栓不仅具有优异的疲劳性能，还具有较好的耐蚀性能，而调质态304/45钢复合螺栓在这两方面的表现则相对较差。",
+          "response_length": 513,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 50497,
+          "has_sources": true,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "240",
+            "85",
+            "MPa",
+            "疲劳极限"
+          ],
+          "missing": [],
+          "coverage": 1.0
+        },
+        "sources": {
+          "has_sources": true
+        }
+      },
+      "quality_scores": null,
+      "verdict": "PASS",
+      "verdict_reasons": [],
+      "total_time_ms": 78831
+    },
+    {
+      "id": "Q2",
+      "name": "对比分析 - 调质处理对耐腐蚀性的影响",
+      "query": "调质处理对304/45双金属复合螺栓的耐腐蚀性能产生了什么影响？请结合电化学数据和盐雾试验结果具体说明。",
+      "layers": {
+        "es_search": {
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.031746031746031744,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_adef1c9f6d23",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "之间的结合问题[20]。结 合强度高的优点是在后续加工中不易引起分层和 剥落[21]。其次,当2种金属组分相互作用时,可能 发生元素扩散,导致复合材料接缝处形成金属间化 合物[22-23],这可能导致材料在外力作用下脆性断 裂,从而限制双金属复合材料力学性能的提高[24]。 因此,优化工艺参数,实现双金属复合材料的高强 度冶金结合和控制有害元素扩散,对于双金属复合\n\n材料的开发和有效应用至关重要。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.031054405392392875,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_b9235912a3ce",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "|  |\n\n况好,没有出现开裂、孔隙、夹杂物等缺陷。将复合棒料拉拔定径后进行螺纹冷滚丝成型,最终生产出冷加工态 304/45 钢复合螺栓。调质处理是将冷加工态 304/45 钢复合螺栓放入 850  $^{\\circ}$  的箱式炉中保温 1 h,取出后放入水中快速冷却,然后再在 500  $^{\\circ}$  的温度下保温 1 h,取出后放在空气中冷却至室温(25  $^{\\circ}$ )。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.030536130536130537,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.030536130536130537,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.029910714285714284,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 648,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 3,
+          "entities_found": [
+            "调质处理",
+            "304不锈钢螺栓",
+            "耐蚀性能"
+          ],
+          "relations": [
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "抗晶间腐蚀性能 (Property)",
+              "mechanism": "调质处理导致不锈钢覆层中碳化物颗粒的析出，增加了晶界的敏感性。",
+              "context": "表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷加工态复合螺栓, 这会明显降低不锈钢覆层的抗晶间腐蚀性能",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "USES_EQUIPMENT",
+              "object": "箱式炉 (Equipment)",
+              "mechanism": "箱式炉用于提供所需的高温环境。",
+              "context": "将冷加工态 304/45 双金属复合螺栓放入 850 °C 的箱式炉中保温 1 h,取出后放入水中快速冷却。",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "",
+              "context": "调质态",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "耐蚀性能 (Property)",
+              "mechanism": "C元素扩散更加充分,敏化作用更严重",
+              "context": "应用于304/45双金属复合螺栓",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "疲劳性能 (Property)",
+              "mechanism": "调质处理后，304/45 钢复合螺栓覆层硬度、疲劳性能、耐蚀性能大幅度下降。",
+              "context": "",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "瞬断区 (Structure)",
+              "mechanism": "当外加载荷超过材料极限强度时, 导致材料快速断裂。",
+              "context": "35K碳钢和304不锈钢螺栓疲劳断口",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "疲劳裂纹扩展区 (Structure)",
+              "mechanism": "在受力过程中, 螺栓内部的微观组织变化导致了裂纹的形成和扩展。",
+              "context": "35K碳钢和304不锈钢螺栓疲劳断口",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_PROPERTY",
+              "object": "疲劳裂纹扩展阻力 (Property)",
+              "mechanism": "材料内部结构对裂纹扩展的影响",
+              "context": "疲劳裂纹扩展时受到的阻力更大",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "韧窝 (Structure)",
+              "mechanism": "塑性变形导致的微观组织特征",
+              "context": "瞬断区",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "HAS_STRUCTURE",
+              "object": "纤维状奥氏体晶粒 (Structure)",
+              "mechanism": "冷滚丝挤压变形作用",
+              "context": "螺牙部位",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "304不锈钢螺栓 (Material)",
+              "relation": "PROCESSED_BY",
+              "object": "旋转弯曲疲劳试验 (Process)",
+              "mechanism": "通过旋转弯曲疲劳试验来评估材料的耐久性",
+              "context": "对304不锈钢螺栓进行旋转弯曲疲劳试验",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            }
+          ],
+          "paths": [
+            {
+              "nodes": [
+                "调质处理",
+                "疲劳性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "耐蚀性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "箱式炉"
+              ],
+              "relations": [
+                "USES_EQUIPMENT"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "抗晶间腐蚀性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            }
+          ],
+          "time_ms": 18,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304/45双金属",
+            "双金属复合螺栓",
+            "调质处理",
+            "盐雾",
+            "腐蚀",
+            "调质"
+          ],
+          "hyde_preview": "",
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_56d4a5f5ab1d",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "耐蚀性能略有下降。调\n\n![](_page_6_Figure_3.jpeg)\n\n图 8 冷加工态和调质态 304/45 钢复合螺栓疲劳断口的 SEM 照片\n\nFig.8 SEM images of fatigue fracture of cold-worked and tempered 304/45 steel composite bolts\n\n![](_page_6_Figure_6.jpeg)...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.01639344262295082,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_4c1eb1503ece",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "page_6_Picture_10.jpeg)\n\n(a) 304不锈钢螺栓\n\n(b) 冷加工态复合螺栓\n\n![](_page_6_Picture_13.jpeg)\n\n(c) 调质态复合螺栓\n\n图 10 720 h 中性盐雾试验后螺栓样品照片 Fig.10 Bolt samples images after 720 h of neutral salt spray testing\n\n#### 3 结论...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_765d9378deed",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "用消失,使得调质态 304/45 钢复合螺栓的硬度及疲劳性能远不如冷加工态 304/45 钢复合螺栓。\n\n- 2)冷加工态 304/45 钢复合螺栓基本保持了 304 不锈钢螺栓优秀的耐蚀性能,调质处理后由于 敏化作用加重,导致调质态 304/45 钢复合螺栓耐蚀 性能大幅度下降。\n- 3)冷加工态 304/45 钢复合螺栓不仅具有优异的疲劳性能,同时还具有较好的耐蚀性能。\n\n#### 参考文献:...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015384615384615385,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 25903,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "调质处理对304/45双金属复合螺栓的耐腐蚀性能产生了显著的负面影响。根据[来源: test.pdf, p.4]的研究结果，冷加工态304/45钢复合螺栓的不锈钢覆层晶界呈纤维状流线分布，并且在不锈钢近界面侧出现了细小的碳化物颗粒。这些微观结构特征使得冷加工态304/45钢复合螺栓具有较高的硬度和疲劳性能，同时其耐蚀性能略低于纯304不锈钢螺栓。\n\n然而，经过调质处理后，304/45钢复合螺栓的耐蚀性能大幅度下降。具体来说，调质处理包括将冷加工态304/45钢复合螺栓放入850°C的箱式炉中保温1小时，然后快速冷却至室温，再在500°C下保温1小时，最后自然冷却至室温[来源: test.pdf, p.2]。这种热处理过程导致了不锈钢覆层中的碳化物颗粒大量析出，不仅在晶界处，而且在晶内也出现了大量的碳化物颗粒[来源: test.pdf, p.4]。这些碳化物颗粒的析出加剧了晶间敏化现象，从而降低了不锈钢覆层的抗晶间腐蚀性能。\n\n电化学测试和盐雾试验的结果进一步证实了这一点。虽然具体的电化学数据和盐雾试验结果未在提供的资料中详细列出，但可以推测，调质处理后的304/45钢复合螺栓在这些测试中的表现会明显劣于冷加工态的螺栓。这是因为晶间敏化程度的增加会导致材料更容易受到腐蚀介质的侵蚀，特别是在含有氯离子的环境中，如盐雾试验所模拟的海洋环境。\n\n综上所述，调质处理通过改变304/45双金属复合螺栓的微观组织结构，特别是增加了不锈钢覆层中的碳化物颗粒含量及其分布，从而显著降低了该材料的耐腐蚀性能。这一结论对于设计和选择适用于特定腐蚀环境下的紧固件具有重要的指导意义。未来的研究可以进一步探讨如何通过优化热处理工艺或其他方法来改善调质态304/45钢复合螺栓的耐蚀性。",
+          "response_length": 739,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 76513,
+          "has_sources": true,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "盐雾",
+            "碳化物",
+            "耐腐蚀"
+          ],
+          "missing": [
+            "腐蚀电位"
+          ],
+          "coverage": 0.75
+        },
+        "sources": {
+          "has_sources": true
+        }
+      },
+      "quality_scores": null,
+      "verdict": "PASS",
+      "verdict_reasons": [],
+      "total_time_ms": 103085
+    },
+    {
+      "id": "Q3",
+      "name": "因果链追踪 - 敏化→耐腐蚀性下降",
+      "query": "敏化现象是如何通过微观组织变化导致304不锈钢耐腐蚀性下降的？请追踪完整的因果链条。",
+      "layers": {
+        "es_search": {
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.031544957774465976,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_56d4a5f5ab1d",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "耐蚀性能略有下降。调\n\n![](_page_6_Figure_3.jpeg)\n\n图 8 冷加工态和调质态 304/45 钢复合螺栓疲劳断口的 SEM 照片\n\nFig.8 SEM images of fatigue fracture of cold-worked and tempered 304/45 steel composite bolts\n\n![](_page_6_Figure_6.jpeg)...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.01639344262295082,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_adef1c9f6d23",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "之间的结合问题[20]。结 合强度高的优点是在后续加工中不易引起分层和 剥落[21]。其次,当2种金属组分相互作用时,可能 发生元素扩散,导致复合材料接缝处形成金属间化 合物[22-23],这可能导致材料在外力作用下脆性断 裂,从而限制双金属复合材料力学性能的提高[24]。 因此,优化工艺参数,实现双金属复合材料的高强 度冶金结合和控制有害元素扩散,对于双金属复合\n\n材料的开发和有效应用至关重要。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_f97dad1408eb",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "XWP-1000型,济南胜工试验机有限公司)上进行,螺栓规格为M14粗牙螺栓,螺栓长度为100mm。分别对商用35K传统碳钢螺栓、304不锈钢螺栓、冷加工态和调质态304/45钢复合螺栓进行旋转弯曲疲劳试验,并采用体视显微镜(Leika S9E型)和扫描电子\n\n显微镜(SEM, JEOL - 6510型, 日本 Nicocet 公司)观察样品断口形貌。\n\n#### 1.4 腐蚀电化学测试和盐雾试验...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 514,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 4,
+          "entities_found": [
+            "调质处理",
+            "碳化物颗粒",
+            "碳化铬颗粒",
+            "304不锈钢螺栓"
+          ],
+          "relations": [
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "抗晶间腐蚀性能 (Property)",
+              "mechanism": "调质处理导致不锈钢覆层中碳化物颗粒的析出，增加了晶界的敏感性。",
+              "context": "表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷加工态复合螺栓, 这会明显降低不锈钢覆层的抗晶间腐蚀性能",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "USES_EQUIPMENT",
+              "object": "箱式炉 (Equipment)",
+              "mechanism": "箱式炉用于提供所需的高温环境。",
+              "context": "将冷加工态 304/45 双金属复合螺栓放入 850 °C 的箱式炉中保温 1 h,取出后放入水中快速冷却。",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "",
+              "context": "调质态",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "耐蚀性能 (Property)",
+              "mechanism": "C元素扩散更加充分,敏化作用更严重",
+              "context": "应用于304/45双金属复合螺栓",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "调质处理 (Process)",
+              "relation": "DEGRADES",
+              "object": "疲劳性能 (Property)",
+              "mechanism": "调质处理后，304/45 钢复合螺栓覆层硬度、疲劳性能、耐蚀性能大幅度下降。",
+              "context": "",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "碳化物颗粒 (Structure)",
+              "relation": "HAS_STRUCTURE",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "不锈钢近界面侧出现细小的碳化物颗粒。",
+              "context": "冷加工态",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            }
+          ],
+          "paths": [
+            {
+              "nodes": [
+                "调质处理",
+                "疲劳性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "耐蚀性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "箱式炉"
+              ],
+              "relations": [
+                "USES_EQUIPMENT"
+              ]
+            },
+            {
+              "nodes": [
+                "调质处理",
+                "抗晶间腐蚀性能"
+              ],
+              "relations": [
+                "DEGRADES"
+              ]
+            }
+          ],
+          "time_ms": 15,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304不锈钢",
+            "不锈钢",
+            "敏化",
+            "腐蚀"
+          ],
+          "hyde_preview": "",
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.01639344262295082,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_09be84f7e16b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "织倾向。在冷加工态 304/45 钢复合螺栓中,45 钢芯材同样由白色网状铁素体和黑色块状珠光体组成,但由于复合棒料高温热轧过程的作用,晶粒发生长大粗化,晶粒度为 8 级,且产生魏氏组织倾向较为严重,存在过热现象。调质处理后,芯材组织为回火索氏体。35K 碳钢螺栓由于含碳量较低,珠光体含量降低,由白色块状铁素体和黑色条状珠光体组成,晶粒度为 11 级。\n\n螺栓螺牙部位的微观组织如图 3 所示。从图...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_56d4a5f5ab1d",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "耐蚀性能略有下降。调\n\n![](_page_6_Figure_3.jpeg)\n\n图 8 冷加工态和调质态 304/45 钢复合螺栓疲劳断口的 SEM 照片\n\nFig.8 SEM images of fatigue fracture of cold-worked and tempered 304/45 steel composite bolts\n\n![](_page_6_Figure_6.jpeg)...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_4c1eb1503ece",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "page_6_Picture_10.jpeg)\n\n(a) 304不锈钢螺栓\n\n(b) 冷加工态复合螺栓\n\n![](_page_6_Picture_13.jpeg)\n\n(c) 调质态复合螺栓\n\n图 10 720 h 中性盐雾试验后螺栓样品照片 Fig.10 Bolt samples images after 720 h of neutral salt spray testing\n\n#### 3 结论...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015384615384615385,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 35192,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "敏化现象是导致304不锈钢耐腐蚀性下降的一个重要因素，其通过微观组织变化影响材料的抗晶间腐蚀性能。以下是完整的因果链条分析：\n\n1. **碳元素扩散**：在高温热轧过程中，碳钢芯材中的碳（C）元素会向304不锈钢覆层中扩散[来源: test.pdf, p.4]。这种扩散主要沿着晶界进行，因为晶界处的原子排列较为松散，有利于碳元素的迁移。\n\n2. **碳化铬沉淀**：随着碳元素在不锈钢覆层中的扩散，特别是在晶界处，碳与铬（Cr）结合形成碳化铬（Cr₂₃C₆）颗粒，并在晶界处析出[来源: test.pdf, p.4]。这些碳化铬颗粒的形成消耗了晶界附近的铬元素，导致晶界区域的铬含量降低。\n\n3. **铬贫化**：由于碳化铬的形成，晶界附近的铬含量显著减少，使得该区域的铬含量低于维持不锈钢耐腐蚀性的最低要求（通常为12%）。这种铬贫化现象称为“敏化”[来源: test.pdf, p.4]。\n\n4. **晶间腐蚀敏感性增加**：铬贫化的晶界区域变得更容易受到腐蚀介质（如氯离子）的攻击，从而引发晶间腐蚀。晶间腐蚀会导致材料沿晶界发生局部腐蚀，严重时可使材料失去整体结构完整性[来源: test.pdf, p.6]。\n\n5. **耐蚀性能下降**：随着晶间腐蚀的发展，304不锈钢的耐蚀性能显著下降。实验结果显示，调质处理后的304/45钢复合螺栓的腐蚀电位降至-458 mV，电流密度急剧升至7.92 μA/cm²，表明其耐蚀性能大幅下降[来源: test.pdf, p.6]。此外，调质态304/45钢复合螺栓的腐蚀等级仅为3级（出现5%~10%锈蚀面积），远低于冷加工态和304不锈钢螺栓的10级（无锈蚀）[来源: test.pdf, p.6]。\n\n综上所述，敏化现象通过碳元素的扩散、碳化铬的沉淀、晶界的铬贫化以及晶间腐蚀敏感性的增加，最终导致304不锈钢的耐腐蚀性显著下降。这一过程揭示了微观组织变化对材料宏观性能的重要影响。",
+          "response_length": 819,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 3
+            }
+          ],
+          "tool_call_count": 3,
+          "evaluator_loops": 3,
+          "time_ms": 140961,
+          "has_sources": true,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "敏化",
+            "晶间",
+            "铬",
+            "耐腐蚀"
+          ],
+          "missing": [
+            "碳化物"
+          ],
+          "coverage": 0.8
+        }
+      },
+      "quality_scores": null,
+      "verdict": "PASS",
+      "verdict_reasons": [],
+      "total_time_ms": 176683
+    },
+    {
+      "id": "Q4",
+      "name": "KG增强检索 - 制造工艺全链路",
+      "query": "304/45双金属复合螺栓从原材料到成品经过了哪些制造工艺？每种工艺分别改变了什么微观组织、影响了什么性能？",
+      "layers": {
+        "es_search": {
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_adef1c9f6d23",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "之间的结合问题[20]。结 合强度高的优点是在后续加工中不易引起分层和 剥落[21]。其次,当2种金属组分相互作用时,可能 发生元素扩散,导致复合材料接缝处形成金属间化 合物[22-23],这可能导致材料在外力作用下脆性断 裂,从而限制双金属复合材料力学性能的提高[24]。 因此,优化工艺参数,实现双金属复合材料的高强 度冶金结合和控制有害元素扩散,对于双金属复合\n\n材料的开发和有效应用至关重要。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03278688524590164,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.0315136476426799,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_1eb64d11671a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "作为覆层材料,同时为了尽可能提高复合螺栓的强度,芯材选用比 35K 碳钢强度更高的 45 钢,2 种材料的化学成分如表 1 所示。\n\n生产 304/45 钢复合螺栓的主要工艺流程: 先将 碳钢棒料表面进行特殊预合金化处理, 然后穿入 304 不锈钢管中得到复合坯料, 最后在 1 200 ℃下通 过六道次热轧制备复合棒料, 热轧工艺如图 1 所示。 经检测, 制备的复合棒料覆层厚度均匀, 界面结合情...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_b9235912a3ce",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "|  |\n\n况好,没有出现开裂、孔隙、夹杂物等缺陷。将复合棒料拉拔定径后进行螺纹冷滚丝成型,最终生产出冷加工态 304/45 钢复合螺栓。调质处理是将冷加工态 304/45 钢复合螺栓放入 850  $^{\\circ}$  的箱式炉中保温 1 h,取出后放入水中快速冷却,然后再在 500  $^{\\circ}$  的温度下保温 1 h,取出后放在空气中冷却至室温(25  $^{\\circ}$ )。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_765d9378deed",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "用消失,使得调质态 304/45 钢复合螺栓的硬度及疲劳性能远不如冷加工态 304/45 钢复合螺栓。\n\n- 2)冷加工态 304/45 钢复合螺栓基本保持了 304 不锈钢螺栓优秀的耐蚀性能,调质处理后由于 敏化作用加重,导致调质态 304/45 钢复合螺栓耐蚀 性能大幅度下降。\n- 3)冷加工态 304/45 钢复合螺栓不仅具有优异的疲劳性能,同时还具有较好的耐蚀性能。\n\n#### 参考文献:...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 736,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 5,
+          "entities_found": [
+            "热轧",
+            "冷加工",
+            "调质处理",
+            "304不锈钢螺栓",
+            "45钢"
+          ],
+          "relations": [
+            {
+              "subject": "热轧 (Process)",
+              "relation": "USES_EQUIPMENT",
+              "object": "热轧机 (Equipment)",
+              "mechanism": "热轧工艺需要使用热轧机来完成对材料的加工。",
+              "context": "最后在1200℃下通过六道次热轧制备复合棒料",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "热轧 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "双金属复合材料 (Material)",
+              "mechanism": "通过高温下的轧制过程使两种金属紧密结合在一起。",
+              "context": "自发展以来,出现了离心铸造、爆炸焊接和热轧等各种制备工艺。",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "热轧 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "热轧可以使材料获得所需的形状和尺寸，并改善其力学性能。",
+              "context": "最后在1200℃下通过六道次热轧制备复合棒料",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "冷加工 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "304/45钢复合螺栓 (Material)",
+              "mechanism": "通过冷加工可以提高材料的硬度和强度，从而提升其疲劳寿命。",
+              "context": "冷加工态 304/45 钢复合螺栓经过冷加工后表现出更高的疲劳强度。",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "冷加工 (Process)",
+              "relation": "PROCESSED_BY",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "通过塑性变形来改变材料的力学性能。",
+              "context": "冷加工态 304/45复合螺栓疲劳断口",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            }
+          ],
+          "paths": [
+            {
+              "nodes": [
+                "热轧",
+                "热轧机"
+              ],
+              "relations": [
+                "USES_EQUIPMENT"
+              ]
+            }
+          ],
+          "time_ms": 9,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304/45双金属",
+            "双金属复合螺栓"
+          ],
+          "hyde_preview": "",
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_1eb64d11671a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "作为覆层材料,同时为了尽可能提高复合螺栓的强度,芯材选用比 35K 碳钢强度更高的 45 钢,2 种材料的化学成分如表 1 所示。\n\n生产 304/45 钢复合螺栓的主要工艺流程: 先将 碳钢棒料表面进行特殊预合金化处理, 然后穿入 304 不锈钢管中得到复合坯料, 最后在 1 200 ℃下通 过六道次热轧制备复合棒料, 热轧工艺如图 1 所示。 经检测, 制备的复合棒料覆层厚度均匀, 界面结合情...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.01639344262295082,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_adef1c9f6d23",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "之间的结合问题[20]。结 合强度高的优点是在后续加工中不易引起分层和 剥落[21]。其次,当2种金属组分相互作用时,可能 发生元素扩散,导致复合材料接缝处形成金属间化 合物[22-23],这可能导致材料在外力作用下脆性断 裂,从而限制双金属复合材料力学性能的提高[24]。 因此,优化工艺参数,实现双金属复合材料的高强 度冶金结合和控制有害元素扩散,对于双金属复合\n\n材料的开发和有效应用至关重要。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_b9235912a3ce",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "|  |\n\n况好,没有出现开裂、孔隙、夹杂物等缺陷。将复合棒料拉拔定径后进行螺纹冷滚丝成型,最终生产出冷加工态 304/45 钢复合螺栓。调质处理是将冷加工态 304/45 钢复合螺栓放入 850  $^{\\circ}$  的箱式炉中保温 1 h,取出后放入水中快速冷却,然后再在 500  $^{\\circ}$  的温度下保温 1 h,取出后放在空气中冷却至室温(25  $^{\\circ}$ )。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_48a13e1ad4d8",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "doi:10.3969/j.issn.1671-7627.2024.05.009\n\n# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能\n\n王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2\n\n(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)\n\n摘 要:本文将45 钢芯材和30...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015384615384615385,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 35579,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "304/45双金属复合螺栓从原材料到成品的制造工艺主要包括以下几个步骤：预合金化处理、热轧复合、拉拔和滚丝。每种工艺对微观组织和性能的影响如下：\n\n1. **预合金化处理**：\n   - **工艺描述**：在碳钢棒料表面进行特殊预合金化处理，以提高其与304不锈钢管的结合强度。\n   - **微观组织变化**：通过预合金化处理，可以在碳钢表面形成一层富合金层，这有助于后续热轧过程中两种材料的冶金结合[来源: test.pdf, p.6]。\n   - **性能影响**：提高了界面结合强度，减少了分层和剥落的风险，从而提高了复合材料的整体力学性能。\n\n2. **热轧复合**：\n   - **工艺描述**：将经过预合金化处理的碳钢棒料穿入304不锈钢管中，然后在1200℃下通过六道次热轧制备复合棒料。\n   - **微观组织变化**：热轧过程中，高温和压力促使两种材料发生扩散，形成冶金结合。同时，在晶界处可能形成细小的碳化物颗粒，这些颗粒可以起到弥散强化的作用[来源: test.pdf, p.6]。\n   - **性能影响**：热轧复合不仅提高了界面结合强度，还通过弥散强化作用提高了覆层的硬度和疲劳性能。此外，热轧过程中的高温也可能导致元素扩散，形成金属间化合物，但需要控制以避免脆性断裂[来源: test.pdf, p.6]。\n\n3. **拉拔**：\n   - **工艺描述**：将热轧后的复合棒料进行冷拉拔，以达到所需的尺寸和形状。\n   - **微观组织变化**：拉拔过程中，材料受到冷变形，晶粒被拉长并沿拉拔方向排列，形成纤维状流线分布[来源: test.pdf, p.6]。\n   - **性能影响**：冷变形强化机制显著提高了材料的硬度和疲劳性能。然而，过度的冷变形可能导致材料的塑性降低，因此需要合理控制拉拔参数[来源: test.pdf, p.6]。\n\n4. **滚丝**：\n   - **工艺描述**：通过滚丝机将拉拔后的复合棒料加工成螺纹。\n   - **微观组织变化**：滚丝过程中，不锈钢覆层进一步受到冷变形，晶界处的碳化物颗粒更加细小且分布均匀[来源: test.pdf, p.6]。\n   - **性能影响**：滚丝进一步增强了覆层的硬度和疲劳性能。冷变形强化机制使得冷加工态304/45钢复合螺栓的覆层硬度和疲劳性能远高于其他类型的螺栓[来源: test.pdf, p.6]。\n\n综上所述，304/45双金属复合螺栓的制造工艺包括预合金化处理、热轧复合、拉拔和滚丝。这些工艺通过改变微观组织，显著提高了材料的界面结合强度、硬度和疲劳性能。特别是冷变形强化机制在拉拔和滚丝过程中发挥了重要作用，使得冷加工态304/45钢复合螺栓具有优异的综合性能。",
+          "response_length": 1143,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 3
+            }
+          ],
+          "tool_call_count": 3,
+          "evaluator_loops": 3,
+          "time_ms": 143497,
+          "has_sources": true,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "热轧",
+            "拉拔",
+            "冷加工",
+            "组织",
+            "性能"
+          ],
+          "missing": [
+            "调质"
+          ],
+          "coverage": 0.83
+        }
+      },
+      "quality_scores": null,
+      "verdict": "PASS",
+      "verdict_reasons": [],
+      "total_time_ms": 179823
+    },
+    {
+      "id": "Q5",
+      "name": "多模态 - S-N曲线与疲劳断口分析",
+      "query": "根据论文中的S-N曲线（图5），冷加工态和调质态螺栓的疲劳断裂模式有什么不同？请结合疲劳断口形貌特征来解释。",
+      "layers": {
+        "es_search": {
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_9e7894684c1a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "\n\n![](_page_4_Figure_3.jpeg)\n\n图 3 螺栓螺牙金相显微组织照片\n\nFig.3 Metallographic microstructure images of bolt threads\n\n![](_page_4_Figure_6.jpeg)\n\n图 4 螺栓螺牙硬度分布曲线\nFig.4 Hardness distribution curve of bolt threads...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03278688524590164,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d63855309a5c",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "部的纤维状流线分布特征,进一步延长了疲劳裂纹的萌生时间,提高了冷加工态 304/45 钢复合螺栓的疲劳强度和寿命。\n\n#### 2.2.2 疲劳断口宏观形貌分析\n\n螺栓疲劳断口宏观形貌照片见图 6。从图 6 可以看出:螺栓疲劳断口分为 3 个区域(疲劳裂纹源区、疲劳裂纹扩展区和瞬断区)。在该疲劳试验过程中发现:疲劳裂纹源区大多处于螺栓与夹具螺母接触的第一根螺纹的根部,裂纹源区可以看到闪光的小刻面。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.03225806451612903,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.031746031746031744,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_f97dad1408eb",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "XWP-1000型,济南胜工试验机有限公司)上进行,螺栓规格为M14粗牙螺栓,螺栓长度为100mm。分别对商用35K传统碳钢螺栓、304不锈钢螺栓、冷加工态和调质态304/45钢复合螺栓进行旋转弯曲疲劳试验,并采用体视显微镜(Leika S9E型)和扫描电子\n\n显微镜(SEM, JEOL - 6510型, 日本 Nicocet 公司)观察样品断口形貌。\n\n#### 1.4 腐蚀电化学测试和盐雾试验...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d5512ce58236",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "of bolt fatigue fracture under maximum surface bending stress of 300 MPa\n\n由于断裂时弯曲应力已经超过螺栓的抗拉强 度,螺栓最终发生失稳断裂,所以瞬断区表面一般 较为灰暗且非常粗糙。由图 6 可见:4 种螺栓断口 的疲劳裂纹源区对侧均有面积较小的灰暗粗糙瞬 断区,且剪切唇非常明显。\n\n#### 2.2.3 疲劳断口微观形貌分析...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 428,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 3,
+          "entities_found": [
+            "疲劳性能",
+            "S-N曲线",
+            "瞬断区"
+          ],
+          "relations": [
+            {
+              "subject": "疲劳性能 (Property)",
+              "relation": "HAS_PROPERTY",
+              "object": "304奥氏体不锈钢 (Material)",
+              "mechanism": "喷丸处理可以改善材料的表面状态，从而提高其抗疲劳能力。",
+              "context": "喷丸处理后的304奥氏体不锈钢",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "疲劳性能 (Property)",
+              "relation": "HAS_PROPERTY",
+              "object": "304/45钢复合螺栓 (Material)",
+              "mechanism": "冷加工态保持了原始材料的疲劳性能。",
+              "context": "冷加工态；冷加工态 304/45 钢复合螺栓不仅具有优异的疲劳性能,同时还具有较好的耐蚀性能。",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "疲劳性能 (Property)",
+              "relation": "DEGRADES",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "调质处理后冷变形强化作用消失",
+              "context": "调质态, 经过720 h中性盐雾试验后",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "疲劳性能 (Property)",
+              "relation": "DEGRADES",
+              "object": "调质处理 (Process)",
+              "mechanism": "调质处理后，304/45 钢复合螺栓覆层硬度、疲劳性能、耐蚀性能大幅度下降。",
+              "context": "",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            },
+            {
+              "subject": "疲劳性能 (Property)",
+              "relation": "HAS_PROPERTY",
+              "object": "304/45双金属复合螺栓 (Material)",
+              "mechanism": "滚丝对304/45双金属复合螺栓的不锈钢覆层产生的冷变形强化作用以及热轧过程中在晶界处产生的弥散强化作用",
+              "context": "冷加工态, 经过720 h中性盐雾试验后",
+              "source_doc": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c"
+            }
+          ],
+          "paths": [],
+          "time_ms": 18,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "S-N曲线",
+            "冷加工",
+            "疲劳",
+            "断口",
+            "调质"
+          ],
+          "hyde_preview": "",
+          "hits": 5,
+          "chunks": [
+            {
+              "chunk_id": "chunk_9e7894684c1a",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "\n\n![](_page_4_Figure_3.jpeg)\n\n图 3 螺栓螺牙金相显微组织照片\n\nFig.3 Metallographic microstructure images of bolt threads\n\n![](_page_4_Figure_6.jpeg)\n\n图 4 螺栓螺牙硬度分布曲线\nFig.4 Hardness distribution curve of bolt threads...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.01639344262295082,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d63855309a5c",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "部的纤维状流线分布特征,进一步延长了疲劳裂纹的萌生时间,提高了冷加工态 304/45 钢复合螺栓的疲劳强度和寿命。\n\n#### 2.2.2 疲劳断口宏观形貌分析\n\n螺栓疲劳断口宏观形貌照片见图 6。从图 6 可以看出:螺栓疲劳断口分为 3 个区域(疲劳裂纹源区、疲劳裂纹扩展区和瞬断区)。在该疲劳试验过程中发现:疲劳裂纹源区大多处于螺栓与夹具螺母接触的第一根螺纹的根部,裂纹源区可以看到闪光的小刻面。...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.016129032258064516,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_de9fcd54ba2b",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "e_22.jpeg)\n\n![](_page_5_Picture_23.jpeg)\n\n(c) 304不锈钢螺栓疲劳裂纹扩展区\n\n(d) 304不锈钢螺栓瞬断区\n\n图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015873015873015872,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d5512ce58236",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "of bolt fatigue fracture under maximum surface bending stress of 300 MPa\n\n由于断裂时弯曲应力已经超过螺栓的抗拉强 度,螺栓最终发生失稳断裂,所以瞬断区表面一般 较为灰暗且非常粗糙。由图 6 可见:4 种螺栓断口 的疲劳裂纹源区对侧均有面积较小的灰暗粗糙瞬 断区,且剪切唇非常明显。\n\n#### 2.2.3 疲劳断口微观形貌分析...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015625,
+              "is_figure": false
+            },
+            {
+              "chunk_id": "chunk_d96cab28e914",
+              "doc_id": "de30a56b-9ef5-4325-8ba2-18c6f4a0fe1c",
+              "content_preview": "</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。\n\n从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷...",
+              "page_number": -1,
+              "source_pdf_id": "test.pdf",
+              "chunk_type": "text",
+              "score": 0.015384615384615385,
+              "is_figure": false
+            }
+          ],
+          "time_ms": 34444,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "根据[来源: test.pdf, p.4]的数据显示，冷加工态和调质态304/45钢复合螺栓在疲劳断裂模式上存在显著差异。这些差异主要体现在S-N曲线、疲劳裂纹源区、疲劳裂纹扩展区以及瞬断区的形貌特征上。\n\n### S-N曲线\n- **冷加工态304/45钢复合螺栓**：其极限应力约为240 MPa，在300 MPa最大表面弯曲应力中点值下，疲劳断裂循环次数为30.4万次。\n- **调质态304/45钢复合螺栓**：其极限应力急剧下降至85 MPa，在相同条件下，疲劳断裂循环次数仅为1.1万次。\n\n### 疲劳断口宏观形貌分析\n从图6可以看出，螺栓疲劳断口分为三个区域：疲劳裂纹源区、疲劳裂纹扩展区和瞬断区。疲劳裂纹源区大多处于螺栓与夹具螺母接触的第一根螺纹的根部，裂纹源区可以看到闪光的小刻面。\n\n### 疲劳断口微观形貌分析\n- **疲劳裂纹源区**：\n  - 冷加工态304/45钢复合螺栓具有明显的发散状纹路，向碳钢层四周扩展。\n  - 调质态304/45钢复合螺栓具有明显的台阶状纹路，说明疲劳裂纹的扩展在两种金属的界面处发生了转向。\n\n- **界面处**：\n  - 冷加工态304/45钢复合螺栓存在分离现象，这是由于螺栓在受弯曲应力后碳钢层和不锈钢层出现分离。\n  - 调质态304/45钢复合螺栓界面结合情况较好，没有明显的分离现象。\n\n- **疲劳裂纹扩展区**：\n  - 冷加工态304/45钢复合螺栓的疲劳辉纹步距为1 μm。\n  - 调质态304/45钢复合螺栓的疲劳辉纹步距为4 μm。\n  - 步距越小，表明疲劳裂纹扩展时受到的阻力越大，疲劳寿命越高。\n\n- **瞬断区**：\n  - 两种复合螺栓均呈现韧窝形貌，说明在此处都发生了塑性断裂。\n\n### 分析逻辑\n1. **冷加工态螺栓**：由于不锈钢覆层的冷变形强化作用和不锈钢侧近界面处碳化物的析出，提高了不锈钢覆层的硬度。加上螺牙根部的纤维状流线分布特征，进一步延长了疲劳裂纹的萌生时间，从而提高了疲劳强度和寿命。\n2. **调质态螺栓**：调质处理降低了材料的硬度和韧性，导致疲劳裂纹更容易萌生和扩展。此外，调质态螺栓在界面处的结合情况较好，但整体疲劳性能较差。\n\n综上所述，冷加工态304/45钢复合螺栓在疲劳断裂模式上表现出更高的疲劳强度和更长的疲劳寿命，而调质态螺栓则表现出较低的疲劳强度和较短的疲劳寿命。这些差异主要由材料的微观组织结构和力学性能决定。",
+          "response_length": 1026,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 99880,
+          "has_sources": true,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "S-N",
+            "疲劳",
+            "断口",
+            "裂纹"
+          ],
+          "missing": [],
+          "coverage": 1.0
+        },
+        "figures": {
+          "has_figures": true
+        }
+      },
+      "quality_scores": null,
+      "verdict": "PASS",
+      "verdict_reasons": [],
+      "total_time_ms": 134772
+    }
+  ],
+  "aggregate": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "total_time_seconds": 673.19,
+    "average_quality_score": 0,
+    "total_tool_calls": 9
+  }
+}

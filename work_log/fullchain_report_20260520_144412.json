@@ -1,0 +1,472 @@
+{
+  "config": {
+    "model": "qwen-max",
+    "api_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "timestamp_utc": "2026-05-20T06:52:44.805030+00:00",
+    "active_layers": [
+      "chat_pipeline",
+      "es_search",
+      "graph_search",
+      "hyde_search"
+    ],
+    "timeouts": {
+      "layer": 60,
+      "chat": 180
+    }
+  },
+  "test_cases": [
+    {
+      "id": "Q1",
+      "name": "事实检索 - 疲劳极限数值提取",
+      "query": "304/45双金属复合螺栓在冷加工态和调质态下的疲劳极限分别是多少？请引用具体数值和来源页码。",
+      "layers": {
+        "es_search": {
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 534,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 1,
+          "entities_found": [
+            "疲劳"
+          ],
+          "relations": [],
+          "paths": [],
+          "time_ms": 206,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304/45双金属复合螺栓",
+            "冷加工态",
+            "调质态",
+            "疲劳极限"
+          ],
+          "hyde_preview": "根据相关研究，304/45双金属复合螺栓在冷加工态下的疲劳极限显著高于调质态。具体而言，在冷加工状态下，该材料的疲劳强度因纤维状流线分布特征而得到增强，延长了疲劳裂纹的萌生时间，从而提高了其疲劳寿命。文献中指出，冷加工态下304/45双金属复合螺栓的疲劳极限约为650 MPa（来源：《双金属复合材料性能研究》，页码23）。相比之下，在调质处理后，由于敏化作用加重以及冷变形强化作用消失，导致该材料的耐蚀性和疲劳性能下降，使得调质态下的疲劳极限降低至约450 MPa（来源：同上，页码28）。这些结果表明，对于需要较高疲劳性能的应用场景，应优先选择冷加工态的304/45双金属复合螺栓。",
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 36159,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "根据您提供的资料，未能找到关于304/45双金属复合螺栓在冷加工态和调质态下的具体疲劳极限数值的相关信息。这可能意味着当前检索到的文献中缺乏针对该特定材料组合及处理状态下的实验数据或研究成果。\n\n为了准确回答您的问题，我们需要更多专门针对304不锈钢与45号钢构成的双金属复合螺栓，在不同热处理条件下（即冷加工态和调质态）进行疲劳测试的研究报告或技术文档。建议进一步查阅相关领域的专业期刊、论文或者联系从事此类材料研究的机构获取更详细的数据支持。同时，也可以考虑通过实验室自行开展相应的力学性能测试来获得所需的具体数值。",
+          "response_length": 260,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 37876,
+          "has_sources": false,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "疲劳极限"
+          ],
+          "missing": [
+            "240",
+            "85",
+            "MPa"
+          ],
+          "coverage": 0.25
+        },
+        "sources": {
+          "has_sources": false
+        }
+      },
+      "quality_scores": {
+        "relevance": 4,
+        "accuracy": 5,
+        "completeness": 3,
+        "source_quality": 1,
+        "overall": 3,
+        "brief_reason": "回答与问题相关，内容准确但不够完整，缺乏具体数值和来源页码。"
+      },
+      "verdict": "FAIL",
+      "verdict_reasons": [
+        "[Keywords] 25% coverage — missing: ['240', '85', 'MPa']",
+        "[Sources] No source citations found"
+      ],
+      "total_time_ms": 83067
+    },
+    {
+      "id": "Q2",
+      "name": "对比分析 - 调质处理对耐腐蚀性的影响",
+      "query": "调质处理对304/45双金属复合螺栓的耐腐蚀性能产生了什么影响？请结合电化学数据和盐雾试验结果具体说明。",
+      "layers": {
+        "es_search": {
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 405,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 2,
+          "entities_found": [
+            "调质",
+            "腐蚀"
+          ],
+          "relations": [],
+          "paths": [],
+          "time_ms": 29,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "调质处理",
+            "304/45双金属复合螺栓",
+            "耐腐蚀性能",
+            "电化学数据",
+            "盐雾试验"
+          ],
+          "hyde_preview": "",
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 22421,
+          "error": "HyDE search timed out after 60s"
+        },
+        "chat_pipeline": {
+          "response": "根据您提供的信息，目前没有找到直接相关的文献资料来具体说明调质处理对304/45双金属复合螺栓耐腐蚀性能的影响。因此，基于现有信息，我们无法给出一个确切的答案。不过，我可以根据冶金学的基本原理以及已知的关于不锈钢和碳钢耐腐蚀性的知识，提供一些可能的方向。\n\n1. **调质处理简介**：调质处理是一种热处理工艺，通常包括淬火加高温回火两个步骤，目的是提高材料的综合力学性能（如强度、韧性等）。对于不同类型的钢材，调质处理的具体参数会有所不同。\n\n2. **304不锈钢与45#钢特性对比**：\n   - 304不锈钢属于奥氏体不锈钢，具有良好的耐腐蚀性。\n   - 45#钢是一种中碳结构钢，其耐腐蚀性能相对较差，特别是在潮湿或含有腐蚀介质的环境中更容易生锈。\n\n3. **调质处理对耐腐蚀性的影响推测**：\n   - 对于304不锈钢部分来说，调质处理可能会改变其微观组织结构，但一般认为这种变化不会显著影响其固有的良好耐腐蚀性能。\n   - 针对45#钢而言，适当的调质处理可以改善其表面状态，减少缺陷点，从而在一定程度上提高其抗腐蚀能力；但是，由于其本质上的化学成分限制了它对抗更恶劣环境的能力，所以即使经过调质处理，其耐腐蚀性仍然远低于304不锈钢。\n\n4. **电化学测试与盐雾试验**：这两种方法都是评估材料耐腐蚀性能的有效手段。如果能够获取到具体的实验数据（比如极化曲线、腐蚀电流密度值等），将有助于更准确地分析调质处理前后样品之间的差异。遗憾的是，当前缺乏此类详细的数据支持。\n\n综上所述，虽然理论上可以通过调质处理略微提升45#钢部分的耐腐蚀性，但对于整个304/45双金属复合螺栓而言，其整体耐腐蚀性能主要取决于304不锈钢层的表现。为了得到更加精确的结果，建议进行专门针对该类型复合材料的电化学测试及盐雾试验，并收集相关数据以供进一步分析。",
+          "response_length": 781,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 55464,
+          "has_sources": false,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "盐雾",
+            "耐腐蚀"
+          ],
+          "missing": [
+            "腐蚀电位",
+            "碳化物"
+          ],
+          "coverage": 0.5
+        },
+        "sources": {
+          "has_sources": false
+        }
+      },
+      "quality_scores": {
+        "relevance": 5,
+        "accuracy": 4,
+        "completeness": 4,
+        "source_quality": 2,
+        "overall": 4,
+        "brief_reason": "回答紧密相关且内容详实，但缺乏具体数据支持和明确的来源引用。"
+      },
+      "verdict": "FAIL",
+      "verdict_reasons": [
+        "[HyDE] HyDE search timed out after 60s",
+        "[Sources] No source citations found"
+      ],
+      "total_time_ms": 85665
+    },
+    {
+      "id": "Q3",
+      "name": "因果链追踪 - 敏化→耐腐蚀性下降",
+      "query": "敏化现象是如何通过微观组织变化导致304不锈钢耐腐蚀性下降的？请追踪完整的因果链条。",
+      "layers": {
+        "es_search": {
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 615,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 2,
+          "entities_found": [
+            "304不锈钢",
+            "敏化"
+          ],
+          "relations": [],
+          "paths": [],
+          "time_ms": 28,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "敏化现象",
+            "微观组织变化",
+            "304不锈钢",
+            "耐腐蚀性"
+          ],
+          "hyde_preview": "",
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 24510,
+          "error": "HyDE search timed out after 60s"
+        },
+        "chat_pipeline": {
+          "response": "根据您提供的信息，没有找到直接相关的资料来详细解释敏化现象如何通过微观组织变化导致304不锈钢耐腐蚀性下降的具体机制。不过，基于冶金学的基本知识，我可以为您概述这一过程的一般原理。\n\n敏化是指在特定温度范围内（通常为450°C至850°C），奥氏体不锈钢如304型，在加热过程中晶界附近析出碳化铬(Cr23C6)的现象。这个过程可以分为几个步骤：\n\n1. **加热阶段**：当304不锈钢被加热到上述敏感温度区间时，材料内部的碳原子开始变得活跃。\n   \n2. **碳迁移与沉淀**：随着温度升高，碳原子从基体中迁移到晶界处，并在那里与铬元素结合形成碳化铬沉淀物。这是因为晶界提供了较低的能量位点，有利于这些化合物的形成。\n   \n3. **局部贫铬区形成**：由于大量铬参与了碳化物的生成，使得晶界附近的区域出现了明显的铬含量降低，形成了所谓的“贫铬区”。而铬是提高不锈钢抗腐蚀性能的关键元素之一。\n   \n4. **耐蚀性下降**：一旦形成了贫铬区，该区域就失去了足够的铬来形成保护性的氧化铬膜，从而大大降低了材料抵抗腐蚀的能力。特别是在含有氯离子等强侵蚀介质的环境中，这种影响尤为显著。\n\n因此，虽然具体的实验数据或研究结果未能从给定资料中获得，但根据已知的理论框架，我们可以理解敏化是如何通过改变304不锈钢内部结构进而影响其耐腐蚀性能的。如果需要更精确的数据支持或者特定条件下的案例分析，则可能需要查阅更多专门针对此主题的研究文献。",
+          "response_length": 621,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 54153,
+          "has_sources": false,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "graph_path": {
+          "found_paths": [],
+          "coverage": 0.0
+        },
+        "keywords": {
+          "found": [
+            "敏化",
+            "碳化物",
+            "铬",
+            "耐腐蚀"
+          ],
+          "missing": [
+            "晶间"
+          ],
+          "coverage": 0.8
+        }
+      },
+      "quality_scores": {
+        "relevance": 5,
+        "accuracy": 5,
+        "completeness": 4,
+        "source_quality": 3,
+        "overall": 4,
+        "brief_reason": "回答全面准确地解释了敏化现象对304不锈钢耐腐蚀性的影响，但缺乏具体实验数据或研究文献支持。"
+      },
+      "verdict": "FAIL",
+      "verdict_reasons": [
+        "[GraphPath] Only 0% of expected nodes in paths",
+        "[HyDE] HyDE search timed out after 60s"
+      ],
+      "total_time_ms": 85598
+    },
+    {
+      "id": "Q4",
+      "name": "KG增强检索 - 制造工艺全链路",
+      "query": "304/45双金属复合螺栓从原材料到成品经过了哪些制造工艺？每种工艺分别改变了什么微观组织、影响了什么性能？",
+      "layers": {
+        "es_search": {
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 315,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 2,
+          "entities_found": [
+            "304/45双金属",
+            "双金属复合螺栓"
+          ],
+          "relations": [],
+          "paths": [],
+          "time_ms": 25,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "304/45双金属复合螺栓",
+            "原材料",
+            "成品",
+            "制造工艺",
+            "微观组织",
+            "性能"
+          ],
+          "hyde_preview": "304/45双金属复合螺栓从原材料到成品主要经历了热轧、调质处理以及冷滚丝等制造工艺。首先，在高温热轧过程中，碳钢芯材中的C元素向不锈钢覆层扩散，并且优先沿着覆层晶界进行，最终在晶界处形成碳化铬颗粒沉淀析出，这一结构变化增强了材料的硬度和耐磨性。随后，通过调质处理以期改善其综合机械性能，但遗憾的是，这种处理方式反而导致了耐蚀性能、疲劳性能及硬度的下降，具体表现为：调质态下，由于敏化作用加重，耐蚀性能显著降低；同时，调质处理后冷变形强化作用消失，使得疲劳性能和硬度均有所减弱。最后，采用冷滚丝工艺对螺栓进行加工，该过程通过冷变形提高了材料硬度，这是因为不锈钢具有很高的冷变形强化指数，在冷滚丝过程中会迅速产生加工硬化现象，加上冷加工态复合螺栓的不锈钢覆层中析出的碳化物起到一定的强化作用，进一步提升了复合螺栓的覆层硬度。此外，冷加工状态下形成的纤维状流线分布特征有助于延长疲劳裂纹的萌生时间，从而提高疲劳强度和寿命。综上所述，不同制造工艺对304/45双金属复合螺栓微观组织及性能的影响存在显著差异。",
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 60594,
+          "error": null
+        },
+        "chat_pipeline": {
+          "response": "根据您提供的信息，没有找到直接相关的资料来详细描述304/45双金属复合螺栓的具体制造工艺及其对微观组织和性能的影响。但是，基于冶金学的一般知识，我可以推测这类复合材料可能经历的一些典型制造过程，并讨论这些过程如何影响材料的微观结构与性能。\n\n1. **原材料准备**：首先需要准备好两种不同材质（假设这里指的是304不锈钢和45号钢）的原料棒材或板材。这一步骤本身不会显著改变材料的微观结构，但选择合适的初始状态对于后续加工非常重要。\n\n2. **表面处理**：为了确保良好的结合效果，在进行复合之前通常会对接触面进行清洁、打磨等预处理工作。这样做可以去除表面氧化层和其他污染物，有利于提高界面间的结合强度。\n\n3. **复合连接技术**：\n   - **爆炸焊接**：通过控制爆炸能量使两种金属在高速碰撞下瞬间熔合在一起。此方法能够形成非常牢固的冶金结合，同时由于快速冷却作用，可能会产生细小晶粒结构，从而增强材料的整体强度。\n   - **热轧/冷轧复合**：将两层或多层金属板叠放后经过高温加热再施加压力使其紧密结合。热处理过程中会发生再结晶现象，有助于改善材料塑性；而冷变形则会引入位错密度增加，提高硬度。\n   - **扩散焊接**：在一定温度和压力条件下长时间保温，促进原子间相互扩散实现连接。该过程可以使界面区域形成过渡层，进一步提升接头处的耐腐蚀性和机械性能。\n\n4. **成型加工**：包括拉拔、锻造等步骤以获得所需形状尺寸的半成品。这些操作会导致晶粒细化、纤维化等变化，进而影响最终产品的力学特性如抗拉强度、延展性等。\n\n5. **热处理**：根据具体需求对复合材料实施退火、淬火+回火等热处理工艺。例如，对于304不锈钢部分而言，适当的固溶处理可以消除加工硬化效应并恢复其优良的耐蚀性；而对于45#钢，则可通过调质处理优化其综合机械性能。\n\n6. **精整及检验**：最后还需经过抛光、电镀等表面修饰工序以及严格的质量检测，确保产品符合相关标准要求。\n\n请注意，上述内容是基于通用知识做出的推测，并非针对特定型号“304/45”双金属复合螺栓的确切描述。若要获取更准确的信息，建议查阅专门的技术文献或咨询相关领域的专家。",
+          "response_length": 922,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 86242,
+          "has_sources": false,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "kg_entities": {
+          "expected": [
+            "304不锈钢",
+            "45钢"
+          ],
+          "found": [
+            "304/45双金属复合螺栓",
+            "原材料",
+            "成品",
+            "制造工艺",
+            "微观组织",
+            "性能"
+          ],
+          "missing": [
+            "304不锈钢",
+            "45钢"
+          ]
+        },
+        "keywords": {
+          "found": [
+            "热轧",
+            "拉拔",
+            "调质",
+            "组织",
+            "性能"
+          ],
+          "missing": [
+            "冷加工"
+          ],
+          "coverage": 0.83
+        }
+      },
+      "quality_scores": {
+        "relevance": 4,
+        "accuracy": 3,
+        "completeness": 4,
+        "source_quality": 2,
+        "overall": 3,
+        "brief_reason": "回答提供了基于冶金学常识的推测性信息，但缺乏针对特定双金属复合螺栓的确切资料和引用来源。"
+      },
+      "verdict": "FAIL",
+      "verdict_reasons": [
+        "[KG entities] Missing: ['304不锈钢', '45钢']"
+      ],
+      "total_time_ms": 152678
+    },
+    {
+      "id": "Q5",
+      "name": "多模态 - S-N曲线与疲劳断口分析",
+      "query": "根据论文中的S-N曲线（图5），冷加工态和调质态螺栓的疲劳断裂模式有什么不同？请结合疲劳断口形貌特征来解释。",
+      "layers": {
+        "es_search": {
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 432,
+          "has_figures": false,
+          "error": null
+        },
+        "graph_search": {
+          "entity_count": 3,
+          "entities_found": [
+            "S-N曲线",
+            "断口",
+            "疲劳"
+          ],
+          "relations": [],
+          "paths": [],
+          "time_ms": 28,
+          "error": null,
+          "neo4j_available": true
+        },
+        "hyde_search": {
+          "entities": [
+            "S-N曲线",
+            "冷加工态螺栓",
+            "调质态螺栓",
+            "疲劳断裂模式",
+            "疲劳断口形貌特征"
+          ],
+          "hyde_preview": "",
+          "hits": 0,
+          "chunks": [],
+          "time_ms": 26749,
+          "error": "HyDE search timed out after 60s"
+        },
+        "chat_pipeline": {
+          "response": "根据您提供的信息，没有找到直接相关的文献资料来详细解释冷加工态和调质态螺栓在S-N曲线（图5）上表现出来的疲劳断裂模式差异及其与疲劳断口形貌特征之间的关系。因此，我将基于冶金学的基本原理以及对这两种处理方式的理解给出一个概括性的回答。\n\n1. **冷加工态螺栓**：冷加工是指通过塑性变形而不改变材料温度的方法来提高材料强度的过程。对于螺栓而言，经过冷加工后，其表面会产生一定的残余应力，并且晶粒结构会变得更加细密。这种状态下的螺栓，在承受循环载荷时，由于表面硬度较高而内部相对柔软，容易形成从表面开始扩展的裂纹。因此，冷加工态螺栓的疲劳断裂通常表现为从表面缺陷处起始并逐渐向内发展的裂纹模式。断口观察下，可以看到明显的海滩线（beach marks），这些是裂纹扩展过程中留下的痕迹；同时，还可能发现一些微小的初始裂纹源点。\n\n2. **调质态螺栓**：调质处理是一种热处理工艺，包括淬火加高温回火两个步骤，目的是为了获得良好的综合力学性能。经过调质处理后的螺栓具有较高的韧性和适当的硬度。这类螺栓在受到重复应力作用时，虽然也可能会出现由表面或近表面缺陷引发的裂纹，但由于整体韧性较好，所以相比于冷加工态螺栓来说，其抵抗裂纹扩展的能力更强。因此，在S-N曲线上，调质态螺栓往往表现出更高的疲劳寿命。从断口形态上看，除了可能出现的海滩线外，还会有更多的纤维状区域（fibrous area），这反映了材料在断裂前经历了较大的塑性变形。\n\n综上所述，尽管具体细节需要参考实际实验数据及图像分析结果，但总体而言，冷加工态与调质态螺栓之间存在着显著不同的疲劳行为特性。前者更倾向于从表面缺陷处产生并快速扩展的脆性断裂，后者则显示出更好的抗裂纹扩展能力以及更加复杂的断口特征。然而，请注意上述结论基于一般理论知识得出，在缺乏具体研究支持的情况下可能存在局限性。",
+          "response_length": 776,
+          "tool_calls": [
+            {
+              "name": "search_metallurgy_text",
+              "count": 1
+            }
+          ],
+          "tool_call_count": 1,
+          "evaluator_loops": 1,
+          "time_ms": 70069,
+          "has_sources": false,
+          "has_useful_content": true,
+          "error": null
+        }
+      },
+      "validations": {
+        "keywords": {
+          "found": [
+            "S-N",
+            "疲劳",
+            "断口",
+            "裂纹"
+          ],
+          "missing": [],
+          "coverage": 1.0
+        },
+        "figures": {
+          "has_figures": true
+        }
+      },
+      "quality_scores": {
+        "relevance": 5,
+        "accuracy": 4,
+        "completeness": 4,
+        "source_quality": 2,
+        "overall": 4,
+        "brief_reason": "回答高度相关且内容详实准确，但由于缺乏具体文献支持，来源质量较低。"
+      },
+      "verdict": "FAIL",
+      "verdict_reasons": [
+        "[HyDE] HyDE search timed out after 60s"
+      ],
+      "total_time_ms": 105779
+    }
+  ],
+  "aggregate": {
+    "total": 5,
+    "passed": 0,
+    "failed": 5,
+    "total_time_seconds": 512.79,
+    "average_quality_score": 3.6,
+    "total_tool_calls": 5
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -6,14 +6,19 @@ import type { BoundingBox } from '../App';
 import { FileUp, ZoomIn, ZoomOut, Search, Sun } from 'lucide-react';
 import { useToast } from './Toast';
 
-// Setup local worker to allow it to find openjpeg.wasm in the same directory
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf-assets/pdf.worker.min.mjs';
+// Use Vite's native URL resolution to ensure worker and its WASM dependencies are served correctly
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
-// PDF.js document options — CJK 字体正确渲染
+// PDF.js document options — CJK 字体正确渲染及 WASM 图像解码
 const PDF_OPTIONS = {
   cMapUrl: '/pdf-assets/cmaps/',
-  cMapPacked: true,
   standardFontDataUrl: '/pdf-assets/standard_fonts/',
+  wasmUrl: '/pdf-assets/', // 必须提供，否则 JpxImage 和 qcms 会抛错导致图片无法渲染
+  disableFontFace: true, // 阻止由于缺字体(如 STSong-Light)导致整个 Canvas 绘图上下文崩溃
+  stopAtErrors: false,
 };
 
 type Point = { x: number; y: number };
@@ -34,7 +39,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [brightness, setBrightness] = useState(85);
-  const [contrast, setContrast] = useState(95);
+  // const [contrast, setContrast] = useState(95);
   const [currentSourceType, setCurrentSourceType] = useState<'uploaded' | 'retrieved'>('uploaded');
   
   // Selection Box State
@@ -75,7 +80,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
       formData.append('file', selectedFile);
 
       try {
-        const response = await fetch('http://localhost:8000/api/v1/upload_pdf', {
+        const response = await fetch('/api/v1/upload_pdf', {
           method: 'POST',
           body: formData,
         });
@@ -103,6 +108,12 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
     setNumPages(numPages);
     setPageNumber(1);
   }
+
+  // Clear drawing box if zoom changes
+  React.useEffect(() => {
+    setFinalBox(null);
+    setContextMenu(null);
+  }, [scale]);
 
   // --- Bounding Box Drawing Logic ---
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -222,16 +233,16 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
         {file && (
           <>
             <span style={{ marginLeft: 'auto', fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-              第 {pageNumber} / {numPages} 页
+              {numPages > 0 ? `第 ${pageNumber} / ${numPages} 页` : '解析中...'}
             </span>
             <button
               onClick={() => setPageNumber(p => Math.max(1, p - 1))}
-              disabled={pageNumber <= 1}
+              disabled={pageNumber <= 1 || numPages === 0}
               style={{ background: 'none', border: '1px solid var(--glass-border)', borderRadius: '4px', color: 'var(--text-secondary)', padding: '3px 8px', cursor: 'pointer' }}
             >&lt;</button>
             <button
               onClick={() => setPageNumber(p => Math.min(numPages, p + 1))}
-              disabled={pageNumber >= numPages}
+              disabled={pageNumber >= numPages || numPages === 0}
               style={{ background: 'none', border: '1px solid var(--glass-border)', borderRadius: '4px', color: 'var(--text-secondary)', padding: '3px 8px', cursor: 'pointer' }}
             >&gt;</button>
             <button onClick={() => setScale(s => Math.max(0.5, s - 0.2))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '3px' }} title="缩小">
@@ -258,7 +269,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
 
       {/* Document Area */}
       <div 
-        style={{ flex: 1, overflow: 'auto', display: 'flex', justifyContent: 'center', backgroundColor: '#0f111a', padding: '20px' }}
+        style={{ flex: 1, overflow: 'auto', textAlign: 'center', backgroundColor: '#0f111a', padding: '20px' }}
       >
         {!file ? (
           <div style={{ margin: 'auto', color: 'var(--text-muted)', textAlign: 'center' }}>
@@ -277,7 +288,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
             onContextMenu={handleRightClick}
             style={{
               position: 'relative',
-              filter: `brightness(${brightness}%) contrast(${contrast}%)`,
+              filter: `brightness(${brightness}%)`,
               transition: 'filter 0.2s ease',
             }}
           >
@@ -292,12 +303,18 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
                 borderRadius: '4px',
               }} />
             )}
-            <Document file={file} onLoadSuccess={onDocumentLoadSuccess} options={PDF_OPTIONS}>
+            <Document 
+              file={file} 
+              onLoadSuccess={onDocumentLoadSuccess} 
+              options={PDF_OPTIONS}
+              loading={<div style={{ padding: '20px', color: 'var(--text-muted)' }}>文献解析中...</div>}
+            >
               <Page 
                 pageNumber={pageNumber} 
                 scale={scale} 
                 renderTextLayer={true} 
                 renderAnnotationLayer={true}
+                loading={<div style={{ padding: '20px', color: 'var(--text-muted)' }}>页面渲染中...</div>}
               />
             </Document>
 
@@ -317,10 +334,10 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <div className="menu-item" onMouseDown={(e) => { e.stopPropagation(); dispatchFork('analyze_region'); }}>
-                  <Search size={14} /> 解析图表 / 图像区域
+                  <Search size={14} /> 🔬 直接解析
                 </div>
-                <div className="menu-item" onMouseDown={(e) => { e.stopPropagation(); dispatchFork('extract_text'); }}>
-                   📖 发送至 Notebook 深度探讨
+                <div className="menu-item" onMouseDown={(e) => { e.stopPropagation(); dispatchFork('deep_research'); }}>
+                   🧠 深度科研
                 </div>
                 <hr style={{ borderColor: 'rgba(255,255,255,0.1)', margin: '4px 0' }}/>
                 <div className="menu-item danger" onMouseDown={(e) => { e.stopPropagation(); setContextMenu(null); }}>取消</div>

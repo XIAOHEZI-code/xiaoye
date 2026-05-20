@@ -7,4 +7,4 @@ cd "/home/xiaohezi/Desktop/prase _claudecode/xiaoye"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY proxy HTTP_PROXY GRPC_PROXY GRPCS_PROXY
 
 # 使用 xiaoye conda 环境
-/media/xiaohezi/Data/conda_envs/xiaoye/bin/python main.py
+./env_xiaoye/bin/python main.py

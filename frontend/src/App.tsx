@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ForkManager from './components/ForkManager';
 import PdfViewer from './components/PdfViewer';
 import Notebook from './components/Notebook';
@@ -6,6 +6,8 @@ import Sidebar from './components/Sidebar';
 import Resizer from './components/Resizer';
 import AskUserModal, { type AskUserEventData } from './components/AskUserModal';
 import { useToast } from './components/Toast';
+import { KnowledgeGraphViewer } from './components/KnowledgeGraphViewer';
+import { Network } from 'lucide-react';
 
 // localStorage 布局持久化键
 const LAYOUT_KEY = 'xiaoye_layout_v1';
@@ -15,7 +17,7 @@ function loadLayout() {
   try {
     const saved = localStorage.getItem(LAYOUT_KEY);
     if (saved) return JSON.parse(saved) as typeof DEFAULT_LAYOUT;
-  } catch {}
+  } catch { }
   return DEFAULT_LAYOUT;
 }
 
@@ -51,15 +53,17 @@ function App() {
   const { showToast } = useToast();
   const [activeTasks, setActiveTasks] = useState<TaskEvent[]>([]);
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
-  const [notebookContent, setNotebookContent] = useState<string>('# 小冶協同工作台\n\n欢迎使用小冶冶金 AI 平台。在左侧载入 PDF 文献，圈选区域并右键触发 Agent 分析...');
+  const [notebookContent, setNotebookContent] = useState<string>('# 工作台\n\n欢迎使用小冶冶金智慧文献服务平台。在左侧载入 PDF 文献，圈选区域并右键触发深入分析...');
   const [thinkingContent, setThinkingContent] = useState<string>(''); // 思维链内容
-  const [documents, setDocuments] = useState<{id: string, filename: string, status: string, created_at: string | null}[]>([]);
+  const [documents, setDocuments] = useState<{ id: string, filename: string, status: string, created_at: string | null }[]>([]);
   const [knowledgeDocId, setKnowledgeDocId] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [askUserEvent, setAskUserEvent] = useState<AskUserEventData | null>(null);
   const [retrievalSources, setRetrievalSources] = useState<RetrievalSource[]>([]);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);       // 从服务端加载的 PDF URL
   const [pdfSourceType, setPdfSourceType] = useState<'uploaded' | 'retrieved'>('uploaded');
+  const [showGraph, setShowGraph] = useState(false);
+  const [deepMode, setDeepMode] = useState(false);
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -139,12 +143,12 @@ function App() {
 
   // Setup Server-Sent Events (SSE) Listener
   useEffect(() => {
-    const eventSource = new EventSource("http://localhost:8000/api/v1/notebook/stream");
-    
+    const eventSource = new EventSource("/api/v1/notebook/stream");
+
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
+
         // AskUser 事件处理
         if (data.type === 'ask_user' && data.ask_id) {
           setAskUserEvent(data as AskUserEventData);
@@ -156,7 +160,16 @@ function App() {
           setRetrievalSources(data.sources as RetrievalSource[]);
           return;
         }
-        
+
+        // Fork VLM: 选区截图推送
+        if (data.type === 'fork_start' && data.image_url) {
+          const imgUrl = data.image_url.startsWith('/')
+            ? `http://localhost:8000${data.image_url}`
+            : data.image_url;
+          setNotebookContent(prev => prev + `\n\n![📷 选区截图](${imgUrl})\n`);
+          return;
+        }
+
         if (data.type === 'reasoning' && data.thinking) {
           setThinkingContent(prev => prev + data.thinking);
         } else if (data.patch) {
@@ -176,7 +189,7 @@ function App() {
         console.error("Failed to parse SSE event", err);
       }
     };
-    
+
     eventSource.onerror = () => {
       // SSE 断运时不弹窗，静默处理（后端未启动时是正常状态）
     };
@@ -189,7 +202,7 @@ function App() {
   // 加载已上传的PDF列表（可被主动调用刷新）
   const fetchDocuments = async () => {
     try {
-      const res = await fetch("http://localhost:8000/api/v1/documents");
+      const res = await fetch("/api/v1/documents");
       const data = await res.json();
       if (data.documents) setDocuments(data.documents);
     } catch {
@@ -209,16 +222,16 @@ function App() {
       bbox,
       timestamp: Date.now()
     };
-    
+
     setActiveTasks(prev => [...prev, newTask]);
-    
+
     try {
-      await fetch("http://localhost:8000/api/v1/fork_agent", {
+      await fetch("/api/v1/fork_agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, documentId, type, bbox })
       });
-    } catch(err) {
+    } catch (err) {
       console.error("[M3 Network Error] Failed to fork task:", err);
       showToast('后端未启动，Fork 任务失败。请先启动 FastAPI 后端服务（localhost:8000）', 'error', 6000);
       setActiveTasks(prev => prev.filter(t => t.task_id !== taskId));
@@ -229,23 +242,24 @@ function App() {
     setCurrentDocumentId(id);
   };
 
-  const handleUserChat = async (message: string) => {
+  const handleUserChat = async (message: string, deepMode: boolean) => {
     const docId = currentDocumentId || null;
     const taskId = "default_session";
-    
+
     // 立即显示用户消息，加占位符
     setNotebookContent(prev => prev + `\n\n---\n**\ud83d\udc64 \u60a8:** ${message}\n\n*\u2026小冶思考中...*\n`);
     // 标记等待第一个 patch 替换占位文字
     pendingReplace.current = true;
     setThinkingContent('');
-    
+
     try {
-      const res = await fetch("http://localhost:8000/api/v1/chat", {
+      const res = await fetch("/api/v1/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           task_id: taskId,
           message: message,
+          deep_mode: deepMode,
           // document_id 为 null 时不传该字段，避免 Pydantic v2 422
           ...(docId ? { document_id: docId } : {}),
         })
@@ -254,7 +268,7 @@ function App() {
         const err = await res.json().catch(() => ({}));
         showToast(err.detail || '对话请求失败', 'error');
       }
-    } catch(err) {
+    } catch (err) {
       showToast('后端未启动，无法发送消息。请先启动 FastAPI 服务', 'error');
     }
   };
@@ -263,7 +277,7 @@ function App() {
   const handleAskUserReply = async (askId: string, taskId: string, reply: string) => {
     setAskUserEvent(null);
     try {
-      await fetch('http://localhost:8000/api/v1/ask_user/reply', {
+      await fetch('/api/v1/ask_user/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ask_id: askId, task_id: taskId, reply }),
@@ -305,6 +319,28 @@ function App() {
         {theme === 'dark' ? '🌙 暗色' : '☀️ 亮色'}
       </div>
 
+      {/* 知识图谱视图按钮 */}
+      <div style={{
+        position: 'fixed',
+        top: '12px',
+        right: '100px',
+        zIndex: 1000,
+        padding: '8px 12px',
+        background: 'var(--panel-bg)',
+        border: '1px solid var(--glass-border)',
+        borderRadius: '8px',
+        cursor: 'pointer',
+        fontSize: '0.85rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        color: 'var(--text-secondary)',
+        transition: 'all 0.2s',
+      }} onClick={() => setShowGraph(true)}>
+        <Network size={16} style={{ color: '#3b82f6' }} />
+        <span style={{ fontWeight: 500, color: 'rgba(59, 130, 246, 0.9)' }}>图谱全景</span>
+      </div>
+
       {/* 主布局 */}
       <div ref={containerRef} className="app-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
@@ -322,7 +358,7 @@ function App() {
           }}
         >
           <div className="panel-header">
-            <span>📄 文献阅读</span>
+            <span>📄 阅读器</span>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '160px' }}>
               {currentDocName || '右键选区可触发 Agent'}
             </span>
@@ -356,7 +392,7 @@ function App() {
         >
           <div className="panel-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>🤖 小冶助手</span>
+              <span> 小冶助手</span>
               {currentKbName && (
                 <span style={{
                   fontSize: '0.72rem',
@@ -398,6 +434,8 @@ function App() {
               content={notebookContent}
               thinkingContent={thinkingContent}
               onChatSubmit={handleUserChat}
+              deepMode={deepMode}
+              onDeepModeToggle={setDeepMode}
             />
           </div>
         </div>
@@ -427,7 +465,7 @@ function App() {
               setKnowledgeDocId(id);
               setCurrentDocumentId(id);
               // 用户点击自己上传的文档 → 从服务端加载 + 蓝色底纹
-              setPdfUrl(`http://localhost:8000/api/v1/documents/${id}/pdf`);
+              setPdfUrl(`/api/v1/documents/${id}/pdf`);
               setPdfSourceType('uploaded');
             }}
             onRefresh={fetchDocuments}
@@ -438,7 +476,7 @@ function App() {
             retrievalSources={retrievalSources}
             onRetrievedSelect={(docId) => {
               // 用户点击检索到的文献 → 从服务端加载 + 无底纹
-              setPdfUrl(`http://localhost:8000/api/v1/documents/${docId}/pdf`);
+              setPdfUrl(`/api/v1/documents/${docId}/pdf`);
               setPdfSourceType('retrieved');
               setCurrentDocumentId(docId);
             }}
@@ -454,6 +492,9 @@ function App() {
         onReply={handleAskUserReply}
         onDismiss={() => setAskUserEvent(null)}
       />
+
+      {/* 知识图谱查看器弹窗 */}
+      {showGraph && <KnowledgeGraphViewer onClose={() => setShowGraph(false)} />}
     </>
   );
 }

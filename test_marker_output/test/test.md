@@ -1,0 +1,273 @@
+doi:10.3969/j.issn.1671-7627.2024.05.009
+
+# 304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能
+
+王 波1,安增军1,叶 超1,张 楠1,朱凤举1,周嘉明2,周梓铭2,丁 毅2
+
+(1.国网江苏省电力有限公司 经济技术研究院,江苏 南京 210008; 2.南京工业大学 材料科学与工程学院,江苏 南京 211800)
+
+摘 要:本文将45 钢芯材和304不锈钢覆层通过热轧复合、拉拔和滚丝后制成304/45 钢双金属复合螺栓,通过金相分析、硬度测试、电化学测试、盐雾试验、旋转弯曲疲劳试验、疲劳断口宏观和微观形貌观察,探讨304/45 钢复合螺栓的耐蚀性能以及疲劳断裂机制,同时将304不锈钢螺栓、35K碳钢螺栓、冷加工态和调质态304/45 钢复合螺栓进行比较。结果表明:冷加工态304/45 钢复合螺栓不锈钢覆层晶界呈纤维状流线分布,不锈钢近界面侧出现细小的碳化物颗粒,使得冷加工态304/45 钢复合螺栓的覆层硬度和疲劳性能都明显高于其他3种螺栓,耐蚀性能略低于304不锈钢螺栓。调质处理后,304/45 钢复合螺栓覆层硬度、疲劳性能、耐蚀性能大幅度下降。不锈钢覆层的晶间敏化程度会影响304/45 钢复合螺栓的耐蚀性能,敏化程度越重,耐蚀性能越差。冷变形强化机制的存在是冷加工态304/45 钢复合螺栓疲劳性能优于其他3种螺栓的主要原因。冷加工态304/45 钢复合螺栓不仅具有优异的疲劳性能,同时具有较好的耐蚀性能。
+
+关键词:复合螺栓;显微组织;调质处理;疲劳性能;耐蚀性能
+
+中图分类号: TG142.33
+
+文章编号: 1671-7627(2024)05-0559-08
+
+# Fatigue performance and corrosion resistance of 304/45 bimetallic composite bolts
+
+WANG Bo<sup>1</sup>, AN Zengjun<sup>1</sup>, YE Chao<sup>1</sup>, ZHANG Nan<sup>1</sup>, ZHU Fengju<sup>1</sup>, ZHOU Jiaming<sup>2</sup>, ZHOU Ziming<sup>2</sup>, DING Yi<sup>2</sup>
+
+Economic and Technological Research Institute, State Grid Jiangsu Electric Power Co., Ltd., Nanjing 210008, China;
+ College of Materials Science and Engineering, Nanjing Tech University, Nanjing 211800, China)
+
+**Abstract**: This study investigates the fatigue performance and corrosion resistance of 304/45 bimetallic composite bolts, which are fabricated by hot rolling, drawing, and thread rolling of a 45 steel core material with a 304 stainless steel cladding. Metallographic analysis, hardness testing, electrochemical testing, salt spray testing, rotating bending fatigue testing, and macro-microscopic observation of fatigue fracture surfaces were conducted to explore the corrosion resistance and fatigue fracture mechanisms of the 304/45 composite bolts. Comparisons were made with 304 stainless steel bolts, 35K carbon steel bolts, cold-worked and tempered 304/45 composite bolts. The results showed that the stainless cladding of cold-worked 304/45 composite bolts exhibited a fibrous streamline distribution at the grain boundaries and fine carbide particles
+
+收稿日期:2023-08-16
+
+基金项目:国家电网江苏分公司科技创新示范项目(1510D01900WB)
+
+作者简介:王波(1987—),男,高级工程师,E-mail:394621007@qq.com;丁毅(联系人),副教授,E-mail:dingyi1107@163.com.
+
+引用格式:王波,安增军,叶超,等.304/45 钢双金属复合螺栓的疲劳性能和耐腐蚀性能[J].南京工业大学学报(自然科学版),2024,46(5):559-566.
+
+WANG Bo, AN Zengjun, YE Chao, et al. Fatigue performance and corrosion resistance of 304/45 bimetallic composite bolts[J]. Journal of Nanjing Tech University (Natural Science Edition),2024,46(5):559-566.
+
+near the interface, leading to significantly higher cladding hardness and fatigue performance compared to the other three types of bolts. However, its corrosion resistance was slightly lower than that of 304 stainless steel bolts. After tempering treatment, the cladding hardness, fatigue performance, and corrosion resistance of the 304/45 steel composite bolts decreased significantly. The study indicates that the degree of intergranular sensitization of the stainless steel cladding affects the corrosion resistance of the 304/45 composite bolts, with deeper sensitization resulting in worse corrosion resistance. The presence of cold deformation strengthening mechanism is the main reason for the superior fatigue performance of the coldworked 304/45 steel composite bolts compared to the other three types of bolts. Cold-worked 304/45 steel composite bolts not only have excellent fatigue performance but also good corrosion resistance.
+
+Keywords; composite bolts; microstructure; tempering treatment; fatigue performance; corrosion resistance
+
+高强度螺栓具有安装简单、质量稳定、施工效率高且拆卸更换方便等特点,已成为钢结构的主要连接方式<sup>[14]</sup>。然而,当高强度螺栓服役于如跨海大桥、海上平台、海上风电、石油化工等极端恶劣的环境,就会面临疲劳损伤的问题和腐蚀破坏的风险<sup>[5-7]</sup>。碳钢或低合金钢螺栓虽然强度高,但耐蚀性比较差<sup>[8]</sup>。不锈钢螺栓耐蚀性良好,但强度低、价格高,无法大量应用于强度和经济型要求高的场合<sup>[9-10]</sup>。因此,研究如何将2种理化性能不同的金属材料通过机械或冶金的方法紧密地结合在一起,既能满足高强度、高疲劳强度,又具有良好的耐腐蚀性能,对于金属资源的合理利用具有长远战略意义。
+
+双金属复合材料是一类将2种不同金属材料紧 密结合后得到的具有新的金属结构的材料[11-12],它 不仅具有2种金属的优越性能,而且具有互补作用, 提高了金属的综合性能,从而提高了其应用价 值[13-14]。双金属复合材料应用广泛,可满足各种应 用场景的需求,具有高耐久性、耐腐蚀性和耐磨性 等优点[15]。自双金属复合材料发展以来,出现了离 心铸造、爆炸焊接和热轧等各种制备工艺[16-19]。选 择合适的制备工艺并优化工艺步骤和参数对于提 高双金属复合材料的性能至关重要。然而,在双金 属复合材料的开发和应用过程中,需要解决一些关 键问题。首先,在双金属复合材料的制备过程中, 存在基体金属与包层金属之间的结合问题[20]。结 合强度高的优点是在后续加工中不易引起分层和 剥落[21]。其次,当2种金属组分相互作用时,可能 发生元素扩散,导致复合材料接缝处形成金属间化 合物[22-23],这可能导致材料在外力作用下脆性断 裂,从而限制双金属复合材料力学性能的提高[24]。 因此,优化工艺参数,实现双金属复合材料的高强 度冶金结合和控制有害元素扩散,对于双金属复合
+
+材料的开发和有效应用至关重要。
+
+不锈钢/碳钢双金属复合螺栓由于兼顾了表面 不锈钢覆层的耐蚀性和芯部碳钢基材高强度,是一 种高强度、高耐蚀新型复合螺栓,能够充分发挥2种 金属材料的优势,同时也能显著节约材料成本并降 低工程造价。目前,复合螺栓在海洋工程和石油化 工领域的应用日益广泛。但是,在海洋工程等应用 领域中,除了对螺栓要求高强度、高耐蚀性能外,一 般还有高疲劳强度或疲劳寿命的要求,然而,针对 复合螺栓疲劳性能的研究鲜少,迫切需要更多深 人、系统性的研究。本文将 45 钢芯材和 304 不锈钢 覆层通过热轧复合、拉拔和滚丝后制成双金属复合 螺栓(简称 304/45 钢复合螺栓),通过金相观察进 行微观组织分析,并进行硬度测试;采用电化学测 试和盐雾试验进行腐蚀性能测试;通过旋转弯曲疲 劳试验方法,对复合螺栓的疲劳性能进行试验研 究,得到304/45钢复合螺栓的疲劳曲线,并对疲劳 断口进行宏观与微观形貌观察。
+
+## 1 实验
+
+#### 1.1 主要材料
+
+热轧态和调质态 304/45 钢复合螺栓,实验室自制;304 不锈钢螺栓和 35K 碳钢螺栓,南京满源汽车零部件制造有限公司。为保证复合螺栓具有良好的耐蚀性,采用 304 不锈钢作为覆层材料,同时为了尽可能提高复合螺栓的强度,芯材选用比 35K 碳钢强度更高的 45 钢,2 种材料的化学成分如表 1 所示。
+
+生产 304/45 钢复合螺栓的主要工艺流程: 先将 碳钢棒料表面进行特殊预合金化处理, 然后穿入 304 不锈钢管中得到复合坯料, 最后在 1 200 ℃下通 过六道次热轧制备复合棒料, 热轧工艺如图 1 所示。 经检测, 制备的复合棒料覆层厚度均匀, 界面结合情
+
+| Table 1 | Analy | sis of material composition |
+|---------|-------|-----------------------------|
+|         | 表 1   | 材料成分分析                      |
+
+| 材料 -    | 质量分数/%  |        |        |        |        |        |       |         |  |
+|---------|---------|--------|--------|--------|--------|--------|-------|---------|--|
+|         | Cr      | Ni     | С      | Mn     | Si     | P      | S     | Fe      |  |
+| 304 不锈钢 | 18. 180 | 8. 180 | 0. 057 | 0. 730 | 0. 390 | 0. 026 | 0.006 | 72. 430 |  |
+| 45 钢    | 0. 039  | 0.016  | 0. 463 | 0. 592 | 0. 228 | 0. 023 | 0.004 | 99. 090 |  |
+
+况好,没有出现开裂、孔隙、夹杂物等缺陷。将复合棒料拉拔定径后进行螺纹冷滚丝成型,最终生产出冷加工态 304/45 钢复合螺栓。调质处理是将冷加工态 304/45 钢复合螺栓放入 850  $^{\circ}$  的箱式炉中保温 1 h,取出后放入水中快速冷却,然后再在 500  $^{\circ}$  的温度下保温 1 h,取出后放在空气中冷却至室温(25  $^{\circ}$ )。
+
+![](_page_2_Figure_6.jpeg)
+
+Fig.1 Hot rolling process
+
+#### 1.2 材料特性测试
+
+利用热镶样机(Struers CitoPress - 10型)将螺栓纵截面镶嵌制成金相试样,分别用 6.5~80 μm 的 SiC 砂纸逐级打磨,使用 W2.5 粒度金刚石研磨抛光剂在金相磨抛机(Struers LaboPol - 6型)上进行机械抛光。抛光后首先使用质量分数为 4%的硝酸乙醇溶液侵蚀碳钢层,然后放入质量分数为 10%的草酸溶液中电解不锈钢覆层,电压为 7 V,电解时间为 25 s,随后将金相试样用无水乙醇清洗后烘干,在光学显微镜(徕卡 DM500型)下进行组织观察。采用维氏硬度计(HVT - 1000型,深圳市浩鑫达仪器有限公司)测定螺栓螺牙部位的硬度,测量所用载荷为 100 N,加载和卸载时间分别为 20 和 10 s。
+
+#### 1.3 疲劳试验
+
+疲劳试验在悬臂梁旋转弯曲疲劳试验机(XWP-1000型,济南胜工试验机有限公司)上进行,螺栓规格为M14粗牙螺栓,螺栓长度为100mm。分别对商用35K传统碳钢螺栓、304不锈钢螺栓、冷加工态和调质态304/45钢复合螺栓进行旋转弯曲疲劳试验,并采用体视显微镜(Leika S9E型)和扫描电子
+
+显微镜(SEM, JEOL - 6510型, 日本 Nicocet 公司)观察样品断口形貌。
+
+#### 1.4 腐蚀电化学测试和盐雾试验
+
+腐蚀电化学试样的螺栓规格为 M14 粗牙螺栓,长度为 50 mm,用铜粉导电胶将试样一侧用铜线黏接,待胶黏剂固化后用环氧树脂封住非工作面。测试前,先用 6.5~23 μm 的 SiC 砂纸逐级打磨初始试样工作面,然后分别用去电离水和无水乙醇清洗试样表面。电化学测试采用电化学工作站(CHI660E型,上海辰华仪器公司)在室温(25℃)条件下进行,采用传统的三电极结构,饱和甘汞电极作为参比电极,铂电极作为对极,螺栓样品作为工作电极[25],试验介质为3.5%(质量分数)的 NaCl 溶液。在开路电位稳定后测定极化曲线,扫描速率为 10 mV/s。采用中性盐雾试验法对 304 不锈钢螺栓、冷加工态和调质态 304/45 钢复合螺栓进行盐雾试验(TMJ - 9704 型盐雾试验机,铁木真科技股份有限公司),环境温度为 35 ℃,测试时间为 720 h,观察螺栓样品表面的腐蚀程度。
+
+### 2 结果与讨论
+
+#### 2.1 微观组织分析和显微硬度测试结果
+
+为了进一步分析 304/45 钢复合螺栓在冷滚丝后及调质处理后微观组织的变化,分别对 45 钢原材、冷加工态以及调质态 304/45 钢复合螺栓的碳钢芯材进行微观组织分析,同时也对 35K 碳钢螺栓进行微观组织分析,结果见图 2。由图 2 可知:45 钢微观组织可见白色网状铁素体和黑色块状珠光体,晶粒度为 10 级,存在轻微的魏氏组织倾向。在冷加工态 304/45 钢复合螺栓中,45 钢芯材同样由白色网状铁素体和黑色块状珠光体组成,但由于复合棒料高温热轧过程的作用,晶粒发生长大粗化,晶粒度为 8 级,且产生魏氏组织倾向较为严重,存在过热现象。调质处理后,芯材组织为回火索氏体。35K 碳钢螺栓由于含碳量较低,珠光体含量降低,由白色块状铁素体和黑色条状珠光体组成,晶粒度为 11 级。
+
+螺栓螺牙部位的微观组织如图 3 所示。从图
+
+![](_page_3_Figure_3.jpeg)
+
+图 2 碳钢金相显微组织照片
+
+Fig.2 Metallographic microstructure images of carbon steel
+
+3(a)可以看出:304 不锈钢螺栓奥氏体晶粒由于受到螺栓冷滚丝挤压变形作用而呈纤维状,沿螺牙成型方向呈流线分布,在螺纹根部尤为明显,纤维状流线组织分布特征可以显著强化沿纤维方向的力学性能<sup>[26]</sup>,由于螺栓疲劳裂纹一般萌生于螺牙根部<sup>[27]</sup>,且疲劳裂纹扩展方向垂直于该纤维状流线分布,因此螺牙根部的这种组织分布特征会显著提高螺栓的疲劳强度;同时,由于不锈钢冷变形强化指数非常高,在螺牙根部冷变形强化作用更为强烈,而且还会残留大量的残余压应力,这些因素都会进一步提高螺栓的疲劳强度<sup>[28]</sup>。另外,在奥氏体晶界处观察到有个别碳化物颗粒析出,直径约1 μm。
+
+从图 3(b)可以看出:冷加工态 304/45 钢复合螺栓的不锈钢覆层同样具有 304 不锈钢纯材螺栓螺牙所具有的纤维状流线组织特征,但奥氏体晶粒大小很不均匀,存在个别异常长大的奥氏体晶粒,这是由复合棒材的轧制温度过高(1 200 ℃)所致。不锈钢覆层晶界可见细小碳化物颗粒析出,表明不锈钢覆层产生了晶间敏化现象<sup>[29]</sup>,这是由于在高温热轧过程中碳钢芯材中的 C 元素向不锈钢覆层扩散,并且优先沿着覆层晶界进行,最终在晶界出现碳化铬颗粒沉淀析出<sup>[30]</sup>。
+
+从图 3(c)可以看出: 经调质处理后,调质态 304/45 钢复合螺栓的不锈钢覆层除晶界碳化物颗粒大量析出外,晶内也开始大量析出碳化物颗粒,同时可见部分碳化物颗粒聚集长大,表明调质态复合螺栓中不锈钢覆层的晶间敏化程度明显高于冷
+
+加工态复合螺栓,这会明显降低不锈钢覆层的抗晶间腐蚀性能。
+
+螺栓螺牙维氏硬度分布曲线见图 4。由图 4 可知:冷加工态 304/45 钢复合螺栓不仅覆层硬度高,而且硬度分布也较为均匀,覆层平均硬度高达 474,明显高于 304 不锈钢螺栓的表层平均硬度(371)。这是由于不锈钢具有很高的冷变形强化指数,在冷滚丝过程中会迅速产生加工硬化,且冷加工态复合螺栓的不锈钢覆层中析出的碳化物起到一定的强化作用,进一步提高了复合螺栓的覆层硬度。经过调质处理后,由于 C 元素的扩散作用,不锈钢覆层近界面侧发生大量细小碳化物颗粒密集析出,产生析出强化作用,因此在覆层近界面侧出现硬度峰值(442)。由于调质处理后不锈钢覆层的冷变形强化作用消失,覆层平均硬度急剧下降至 385。由此可见,冷变形强化作用是冷加工态 304/45 钢复合螺栓覆层硬度提高的主要原因。
+
+#### 2.2 疲劳性能研究
+
+#### 2.2.1 弯曲疲劳试验结果
+
+在进行旋转弯曲疲劳试验前,为了选择疲劳试验所加载的应力范围,对螺栓进行拉伸试验,以确定碳钢螺栓和复合螺栓的抗拉强度。分别对 35K碳钢螺栓和冷加工态 304/45 钢复合螺栓进行拉伸试验,抗拉强度平均值分别为 578 和 593 MPa,因此在固定应力弯曲疲劳试验中取 300 MPa 为最大表面弯曲应力中点值,并在此应力下测出 4 种螺栓的
+
+![](_page_4_Figure_3.jpeg)
+
+图 3 螺栓螺牙金相显微组织照片
+
+Fig.3 Metallographic microstructure images of bolt threads
+
+![](_page_4_Figure_6.jpeg)
+
+图 4 螺栓螺牙硬度分布曲线
+Fig.4 Hardness distribution curve of bolt threads
+
+疲劳寿命。随后取 30 MPa 为应力步长,旋转弯曲疲劳交变应力频率取 4 000 r/min。测定冷加工态与调质态 304/45 钢复合螺栓的 S-N 疲劳曲线,结果见图 5,S-N 疲劳曲线可以描述材料在不同循环应力(S)下能够承受的循环次数(N)。
+
+试验过程中得到:300 MPa 最大表面弯曲应力中点值下,304 不锈钢螺栓、35K 碳钢螺栓、冷加工态和调质态 304/45 钢复合螺栓的疲劳断裂循环次数分别为 18.9、2.8、30.4 和 1.1 万次。由图 5 可知:冷加工态 304/45 钢复合螺栓的疲劳强度远高于调质态 304/45 钢复合螺栓,极限应力约为 240 MPa,而调质态 304/45 钢复合螺栓的极限应力急剧下降至 85 MPa。
+
+众所周知,疲劳裂纹源的萌生对疲劳寿命具有非
+
+![](_page_4_Figure_11.jpeg)
+
+图 5 冷加工态和调质态 304/45 钢复合螺栓弯曲疲劳曲线
+
+Fig. 5 Bending fatigue curves of cold-worked and tempered 304/45 steel composite bolts
+
+常重要的影响。经过以上测试,可以明显看出:不锈钢覆层的冷变形强化作用和不锈钢侧近界面处碳化物的析出均会提高冷加工态 304/45 钢复合螺栓中不锈钢覆层的硬度,加上螺牙根部的纤维状流线分布特征,进一步延长了疲劳裂纹的萌生时间,提高了冷加工态 304/45 钢复合螺栓的疲劳强度和寿命。
+
+#### 2.2.2 疲劳断口宏观形貌分析
+
+螺栓疲劳断口宏观形貌照片见图 6。从图 6 可以看出:螺栓疲劳断口分为 3 个区域(疲劳裂纹源区、疲劳裂纹扩展区和瞬断区)。在该疲劳试验过程中发现:疲劳裂纹源区大多处于螺栓与夹具螺母接触的第一根螺纹的根部,裂纹源区可以看到闪光的小刻面。
+
+疲劳裂纹扩展区又可分为裂纹慢速和快速扩 展区。裂纹慢速扩展区较为光亮平整,这是由于此 时弯曲应力较小,疲劳裂纹扩展较为缓慢,裂纹两 侧断口长时间反复碰撞挤压所致。由图 6(a) 和 6(b)可以明显看出:疲劳断口边缘处存在多条光亮 的条状裂纹,且有明显的贝壳状花纹,说明存在明 显挤入、挤出的碰撞过程。图 6(c)的光亮区较少, 断口周边都为光亮区域,可见其为多源疲劳断裂。 从图 6(d) 可以观察到明显的光亮区域。在疲劳裂 纹快速扩展区,由于此时弯曲应力较大,且螺栓有 效承载面积显著下降,疲劳裂纹扩展较为快速,裂 纹两侧断口挤压次数减少,导致该区域断口不平坦。
+
+![](_page_5_Figure_4.jpeg)
+
+![](_page_5_Picture_5.jpeg)
+
+(a) 35K碳钢螺栓
+
+(b) 冷加工态复合螺栓
+
+![](_page_5_Figure_8.jpeg)
+
+![](_page_5_Picture_9.jpeg)
+
+(c) 调质态复合螺栓
+
+(d) 304不锈钢螺栓
+
+图 6 300 MPa 最大表面弯曲应力下螺栓疲劳断口宏观
+
+Fig.6 Macro morphology of bolt fatigue fracture under maximum surface bending stress of 300 MPa
+
+由于断裂时弯曲应力已经超过螺栓的抗拉强 度,螺栓最终发生失稳断裂,所以瞬断区表面一般 较为灰暗且非常粗糙。由图 6 可见:4 种螺栓断口 的疲劳裂纹源区对侧均有面积较小的灰暗粗糙瞬 断区,且剪切唇非常明显。
+
+#### 2.2.3 疲劳断口微观形貌分析
+
+为了观察疲劳断口的微观形貌特征,估算疲劳 辉纹的步距长度,采用 SEM 对螺栓的疲劳断口进行 观察。35K 碳钢与 304 不锈钢螺栓的疲劳断口微观 形貌如图 7 所示。由图 7 可知:35K 碳钢和 304 不
+
+锈钢螺栓疲劳裂纹扩展区均可见条带状的疲劳辉 纹, 步距分别为 2 和 1 µm, 表明 304 不锈钢螺栓在 疲劳裂纹扩展时受到的阻力更大,2种螺栓的瞬断 区均呈现韧窝形貌,这是典型的塑性断裂特征。
+
+![](_page_5_Picture_18.jpeg)
+
+![](_page_5_Picture_19.jpeg)
+
+(a) 35K碳钢螺栓疲劳裂纹扩展区
+
+(b) 35K碳钢螺栓瞬断区
+
+![](_page_5_Picture_22.jpeg)
+
+![](_page_5_Picture_23.jpeg)
+
+(c) 304不锈钢螺栓疲劳裂纹扩展区
+
+(d) 304不锈钢螺栓瞬断区
+
+图 7 35K 碳钢和 304 不锈钢螺栓疲劳断口的 SEM 照片 Fig.7 SEM images of fatigue fracture of 35K carbon steel and 304 stainless steel bolts
+
+冷加工态和调质态 304/45 复合螺栓疲劳断口微 观形貌如图 8 所示。由图 8 可知:在疲劳裂纹源区,冷 加工态 304/45 钢复合螺栓具有明显的发散状纹路,向 碳钢层的四周扩展,调质态 304/45 钢复合螺栓具有明 显的台阶状纹路,说明疲劳裂纹的扩展在2种金属的 界面处发生了转向。在界面处,冷加工态 304/45 钢复 合螺栓存在分离现象,这是由于螺栓在受弯曲应力后 碳钢层和不锈钢层出现分离,调质态 304/45 钢复合螺 栓界面结合情况相对于冷加工态较好,没有明显的分 离现象。在疲劳裂纹扩展区,冷加工态和调质态 304/ 45 钢复合螺栓的疲劳辉纹步距分别为1和4 μm,说明 冷加工态 304/45 钢复合螺栓在疲劳裂纹扩展时受到 的阻力更大。在瞬断区,2种复合螺栓均呈现韧窝形 貌,说明在此处都发生了塑性断裂。
+
+疲劳断口微观形貌分析结果表明:疲劳辉纹步 距与疲劳寿命也有一定的联系, 步距越小, 表明疲 劳裂纹扩展时受到的阻力越大,疲劳寿命越高。
+
+#### 2.3 腐蚀试验研究
+
+304 不锈钢螺栓、冷加工态和调质态 304/45 钢复 合螺栓的极化曲线见图 9,中性盐雾试验结果见图 10。
+
+由图 9 可知:相对于 304 不锈钢螺栓,冷加工态 304/45 钢复合螺栓腐蚀电位降至-298 mV,腐蚀电 流密度升至 1.44 µA/cm²,耐蚀性能略有下降。调
+
+![](_page_6_Figure_3.jpeg)
+
+图 8 冷加工态和调质态 304/45 钢复合螺栓疲劳断口的 SEM 照片
+
+Fig.8 SEM images of fatigue fracture of cold-worked and tempered 304/45 steel composite bolts
+
+![](_page_6_Figure_6.jpeg)
+
+图 9 3 种螺栓在 3.5%NaCl 溶液中的极化曲线 Fig.9 Polarization curves of three bolts in 3.5% NaCl solution
+
+质处理后,304/45 钢复合螺栓的腐蚀电位降至-458 mV,电流密度急剧升至 7.92 μA/cm²,耐蚀性能大幅下降。304/45 钢复合螺栓耐蚀性能下降的原因与碳钢中的 C 元素向不锈钢覆层中扩散所导致的敏化作用密切相关,冷加工态 304/45 钢复合螺栓的不锈钢覆层由于 C 元素扩散不充分,敏化作用轻微,因此,虽然耐蚀性能略有下降,但仍接近于不锈钢螺栓。调质处理后,304/45 钢复合螺栓的不锈钢覆层由于 C 元素扩散更加充分,敏化作用更严重,因此,调质态 304/45 钢复合螺栓耐蚀性能大幅下降<sup>[31]</sup>。由此可见,冷加工态 304/45 钢复合螺栓不仅具有出色的疲劳性能,还具备优良的耐蚀性能。
+
+由图 10 可知:304 不锈钢螺栓和冷加工态 304/45 钢复合螺栓腐蚀等级均为 10 级(无锈蚀),而调质态 304/45 钢复合螺栓腐蚀等级为 3 级(出现5%~10%锈蚀面积)。由此可见,冷加工态 304/45 钢复合螺栓基本保持了不锈钢螺栓优秀的耐蚀性能,调质处理会显著降低其耐蚀性能。
+
+![](_page_6_Picture_10.jpeg)
+
+(a) 304不锈钢螺栓
+
+(b) 冷加工态复合螺栓
+
+![](_page_6_Picture_13.jpeg)
+
+(c) 调质态复合螺栓
+
+图 10 720 h 中性盐雾试验后螺栓样品照片 Fig.10 Bolt samples images after 720 h of neutral salt spray testing
+
+#### 3 结论
+
+1)滚丝对冷加工态 304/45 钢复合螺栓的不锈钢覆层产生的冷变形强化作用以及热轧过程中在晶界处产生的弥散强化作用使得冷加工态 304/45 钢复合螺栓的覆层硬度以及疲劳性能远高于 304 不锈钢螺栓、35K 碳钢螺栓和调质态 304/45 钢复合螺栓。由于调质处理后冷变形强化作用消失,使得调质态 304/45 钢复合螺栓的硬度及疲劳性能远不如冷加工态 304/45 钢复合螺栓。
+
+- 2)冷加工态 304/45 钢复合螺栓基本保持了 304 不锈钢螺栓优秀的耐蚀性能,调质处理后由于 敏化作用加重,导致调质态 304/45 钢复合螺栓耐蚀 性能大幅度下降。
+- 3)冷加工态 304/45 钢复合螺栓不仅具有优异的疲劳性能,同时还具有较好的耐蚀性能。
+
+#### 参考文献:
+
+- [1] LI D X, UY B, WANG J, et al. Behaviour and design of high-strength grade 12. 9 bolts under combined tension and shear[J]. Journal of Constructional Steel Research, 2020, 174; 106305.
+- [2] WEN J, LIU L, JIAO QR, et al. Failure analysis on 20MnTiB steel high-strength bolts in steel structure [J]. Engineering Failure Analysis, 2020, 118:104820.
+- [ 3 ] JIAO J F, LIU Z X, GUO Q, et al. Constant-amplitude fatigue behavior of M24 high-strength bolt of end-plate flange connection [ J]. Structures, 2021, 34:2041.
+- [4] QIU B, YANG X, ZHOU Z C, et al. Experimental study on fatigue performance of M30 high-strength bolts in bolted spherical joints of grid structures [J]. Engineering Structures, 2020, 205:110123.
+- [5] LI M, YAO L B, ZHANG S S, et al. Study on bolt head corrosion influence on the clamping force loss of high strength bolt [J]. Engineering Failure Analysis, 2021, 129:105660.
+- [6] 王长罡, ENOBONG F D, 李超, 等. 海洋环境中碳钢和不锈钢 螺栓紧固件的腐蚀机制差异研究[J]. 中国腐蚀与防护学报, 2023, 43(4):737.
+- [7] 陈庆伟,谢丹,马辉,等.腐蚀后 M24 高强度螺栓疲劳性能试验[J].科学技术与工程,2022,22(30):13417.
+- [8] DING B D, ZHAO Y Q, HUANG Z H, et al. Tensile bearing capacity for bolted spherical joints with different screwing depths of high-strength bolts [J]. Engineering Structures, 2020, 225.111255
+- [ 9 ] YANG L, WANG Y Q, GUAN J, et al. Bearing strength of stainless steel bolted connections [ J ]. Advances in Structural Engineering, 2015, 18(7):1051.
+- [ 10 ] HU Y, TANG S L, GEORGE A K, et al. Behaviour of stainless steel bolts after exposure to elevated temperatures [ J ]. Journal of Constructional Steel Research, 2019, 157:371.
+- [11] XU W B, YANG Y Y, DAI C W, et al. Optimization of spinning parameters of 20/316L bimetal composite tube based on orthogonal test [J]. Science and Engineering of Composite Materials, 2020, 27(1):272.
+- [12] 陈玉娥,仲红刚,张申,等.双金属复合材料铸造成形工艺综 述[J].铸造,2021,70(6):646.
+- [13] LI L Y, XIAO J, HAN B, et al. Microstructure and mechanical properties of welded joints of L415/316L bimetal composite pipe using post internal-welding process [J]. International Journal of Pressure Vessels and Piping, 2020, 179:104026.
+- [14] LI Z,XIE H B, JIA F H, et al. Study on deformation characteristics and microstructure evolution of 2205/AH36 bimetal composite in a novel hot forming process[J]. Metals, 2020, 10(10):1375.
+
+- [15] LI H, ZHANG L Y, ZHANG B Y, et al. Effect of heat treatment on the microstructure and corrosion resistance of stainless/carbon steel bimetal plate [J]. Advances in Materials Science and Engineering, 2020, 2020; 1280761.
+- [16] LI L Y, XIAO J, HAN B, et al. Welding L415/316L bimetal composite pipe using post-internal-welding process [ J ]. Transactions of the Indian Institute of Metals, 2020, 73(3):675.
+- [17] GREß T, MITTLER T, CHEN H, et al. Production of aluminum AA7075/6060 compounds by die casting and hot extrusion [J]. Journal of Materials Processing Technology, 2020, 280; 116594.
+- [18] UPADHYAYA G S.A brief history of major powder metallurgy research centres [J]. Powder Metallurgy, 2016, 59(1);2.
+- [19] ROZUMEK D, KWIATKOWSKI G. The influence of heat treatment parameters on the cracks growth under cyclic bending in St-Ti clad obtained by explosive welding [J]. Metals, 2019, 9 (3):338.
+- [20] LIU B X, WANG S, CHEN C X, et al. Interface characteristics and fracture behavior of hot rolled stainless steel clad plates with different vacuum degrees [J]. Applied Surface Science, 2019, 463:121.
+- [21] ZHANG S K, XIAO H, XIE H B, et al. The preparation and property research of the stainless steel/iron scrap clad plate [J].
+
+  Journal of Materials Processing Technology, 2014, 214(6):1205.
+- [22] LI H, ZHANG L Y, ZHANG B Y, et al. Interfacial fracture behavior of a stainless/carbon steel bimetal plate in a uniaxial tension test[J]. Results in Physics, 2019, 14:102470.
+- [23] LIU T T, SONG B, HUANG G S, et al. Preparation, structure and properties of Mg/Al laminated metal composites fabricated by roll-bonding, a review [J]. Journal of Magnesium and Alloys, 2022, 10(8); 2062.
+- [24] DEHGHANI F, SALIMI M. Analytical and experimental analysis of the formability of copper-stainless-steel 304L clad metal sheets in deep drawing [J]. The International Journal of Advanced Manufacturing Technology, 2016, 82(1):163.
+- [25] 郑凯,李红艺,韩玉华.电化学工作站在金属腐蚀实验教学中的应用[J].山东化工,2014,43(9);129.
+- [26] WANG X M, XIONG X Y, HUANG K H, et al. Effects of deep rolling on the microstructure modification and fatigue life of 35Cr<sub>2</sub>Ni<sub>4</sub>MoA bolt threads[J]. Metals, 2022, 12(7):1224.
+- [27] YANG S,ZENG W, YANG J S.Characterization of shot peening properties and modelling on the fatigue performance of 304 austenitic stainless steel [J]. International Journal of Fatigue, 2020,137;105621.
+- [28] 张真源,王弘.304 不锈钢的超高周疲劳性能[J].机械工程材料,2008.32(1):79.
+- [29] LIU B X, WANG S, FANG W, et al. Microstructure and mechanical properties of hot rolled stainless steel clad plate by heat treatment [J]. Materials Chemistry and Physics, 2018, 216:460.
+- [30] 温永彬, 巩建鸣, 唐建群, 等.304 奥氏体不锈钢晶界贫 Cr 的数值模拟[J]. 南京工业大学学报(自然科学版), 2014, 36(6):78.
+- [31] LI Z, ZHAO J W, JIA F H, et al. Interfacial characteristics and mechanical properties of duplex stainless steel bimetal composite by heat treatment [J]. Materials Science and Engineering A, 2020, 787:139513.
+
+(责任编辑 林本兰)

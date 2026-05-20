@@ -1,12 +1,13 @@
 """
-Reasoning Pipeline — Worker ReAct 循环
+Reasoning Pipeline — Worker ReAct 循环 (Claude Code-inspired simplification)
 
-[M5 迁移] 从 src/agent/graph.py 迁移至 src/reasoning/graph.py
-
-关键重构：
-  - 通过 ToolRegistry 接口获取工具，不再直接 import ALL_TOOLS
-  - 通过 ToolLoader 接口进行环境探测，不再直接 import skill_loader
-  - Reasoning 管线只依赖接口协议，实现与 Tooling 管线的完全解耦
+Key changes from M5:
+  - Removed Evaluator node (eliminated LLM-as-judge overhead)
+  - Direct loop: tools→compactor→researcher (no intermediary evaluator)
+  - Diminishing returns detection in compactor (character-level Jaccard)
+  - Model tiering: FAST (qwen-turbo) vs DEEP (qwen-max+thinking)
+  - Max turns raised from 4 to 12
+  - Researcher embodies Claude Code "don't gold-plate" philosophy
 """
 
 import asyncio
@@ -16,164 +17,295 @@ import json
 
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 
 from src.reasoning.state import AgentState
 from src.core.config import settings
+from src.core.logger import setup_logger
 
-# ReAct 循环最大迭代次数 — 防止 Evaluator 陷入死循环无限消耗 Token
-MAX_REACT_LOOPS = 8
+logger = setup_logger("xiaoye.reasoning")
 
-# ---------------------------------------------------------
-# Claude Pattern: Leaf-Node Actor
-# The Agent is no longer the omnipotent planner traversing an entire array.
-# It is a specialized, one-shot Worker processing a single sub-task description.
-# ---------------------------------------------------------
+# ReAct 循环最大迭代次数 — 防止死循环无限消耗 Token
+MAX_REACT_LOOPS = 12
 
-class Evaluation(BaseModel):
-    is_satisfied: bool = Field(description="Whether the retrieved information fully answers the current subtask")
-    feedback: str = Field(description="Reasoning for the decision, or instructions on what to search differently if False")
 
-def create_worker_graph():
-    # Base LLM
-    # Claude Pattern: 启用 thinking（自动决定）
+def create_worker_graph(deep_mode: bool = False):
+    """Create the Worker ReAct graph with model tiering.
+
+    Args:
+        deep_mode: If True, use qwen-max with thinking budget for deep research.
+                   If False, use qwen-turbo for speed.
+    """
+    model_name = "qwen-max" if deep_mode else "qwen-turbo"
+    extra = {"thinking": {"type": "auto", "budget": 32000}} if deep_mode else {}
+
+    logger.info(
+        "[Graph] Creating worker graph in %s mode",
+        "DEEP (qwen-max+thinking)" if deep_mode else "FAST (qwen-turbo)",
+    )
+
     llm = ChatOpenAI(
-        model="qwen-max",
+        model=model_name,
         api_key=settings.QWEN_API_KEY,
         base_url=settings.QWEN_BASE_URL,
         temperature=0.2,
-        extra_body={
-            "thinking": {"type": "auto", "budget": 32000}
-        }
+        extra_body=extra,
     )
 
-    # [M5] 通过 ToolRegistry 获取工具，而非直接 import
+    llm_without_tools = ChatOpenAI(
+        model=model_name,
+        api_key=settings.QWEN_API_KEY,
+        base_url=settings.QWEN_BASE_URL,
+        temperature=0.2,
+        extra_body=extra,
+    )
+
+    # [M5] Tool loading via registry and loader
     from src.tooling.registry import get_tool_registry
     from src.tooling.loader import ToolLoader
 
     registry = get_tool_registry()
     tool_loader = ToolLoader()
-    
-    # 1. Researcher Node
-    async def researcher_node(state: AgentState):
-        """Single-task Executor."""
-        from langchain_core.messages import AIMessage
-        
-        # Getting task directly from state messages[0] which contains task_description
-        task_description = state["messages"][0].content
-        
-        feedback = ""
-        if len(state["messages"]) > 1 and hasattr(state["messages"][-1], "content"):
-            last_content = state["messages"][-1].content
-            if "EVALUATOR_FEEDBACK" in last_content:
-                feedback = last_content
-                
-        sys_prompt = "你是一名底层的检索探测 Worker。不要向用户对话，直接调用工具。"
-        user_prompt = f"任务指令: '{task_description}'\n{feedback}\n请立即调用合适的工具查证所需事实。\n注意：在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。"
 
-        # [M5] 通过 ToolLoader 获取工具（它内部使用 ToolRegistry）
+    # ------------------------------------------------------------------
+    # 1. Researcher Node — Claude Code "don't gold-plate" philosophy
+    # ------------------------------------------------------------------
+    async def researcher_node(state: AgentState):
+        """Single-task executor. Stop searching when you have enough — don't gold-plate."""
+        task_description = state["messages"][0].content
+        logger.info("[Researcher] Executing task: %s...", task_description[:50])
+
+        # Extract injected system intervention from compactor, if any
+        feedback = ""
+        messages = list(state["messages"])
+        if len(messages) > 1:
+            last = messages[-1]
+            if isinstance(last, HumanMessage) and "[系统干预]" in str(last.content):
+                feedback = last.content
+
+        sys_prompt = (
+            "你是一名底层的检索探测 Worker。不要向用户对话，直接调用工具。\n"
+            "【自主决策原则】：你就是决定何时停止检索的人。如果已有足够资料回答，立即停止调用工具，直接给出答案。"
+            "宁可给出有据可查的不完整回答，也不要为了'完美匹配'反复搜索。"
+            "当资料库中没有直接答案时，坦诚说明，给出已知的最相关数据即可。"
+            "不要 Gold-Plate：一次检索命中主题相关内容即可，不需要穷举所有可能的搜索词。"
+        )
+
+        user_prompt = (
+            f"任务指令: '{task_description}'\n{feedback}\n"
+            "请立即调用合适的工具查证所需事实。\n"
+            "注意：\n"
+            "1. 在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。\n"
+            "2. 如果你发现上一次检索没有查到结果，**绝对不要**使用相同的关键词再次检索！由于后台支持语义向量(Embedding)检索，请尝试更改为同义词、上位概念，或者直接输入完整的自然语言疑问句。\n"
+            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。\n"
+            "4. 如果你认为已有资料足以回答（哪怕不完美），就不要继续调用工具——直接给答案。"
+        )
+
+        # [M5] Probe environment to load only relevant tools
         relevant_tools = tool_loader.probe_environment(task_description)
         dynamic_llm = llm.bind_tools(relevant_tools)
-        
-        # 确保以 HumanMessage 结尾，避免大模型 API 报错
-        msgs_to_send = [SystemMessage(content=sys_prompt)] + state["messages"][1:] + [HumanMessage(content=user_prompt)]
-        
-        # 使用流式调用或异步调用
-        # 这里改用 ainvoke，具体的流式输出可以依靠外部的 astream_events 捕获
+
+        msgs_to_send = (
+            [SystemMessage(content=sys_prompt)]
+            + state["messages"][1:]
+            + [HumanMessage(content=user_prompt)]
+        )
+
         response = await dynamic_llm.ainvoke(msgs_to_send)
-        
-        # 提取 response 和 tool_calls
-        response_text = response.content if hasattr(response, 'content') else str(response)
-        tool_calls = response.tool_calls if hasattr(response, 'tool_calls') else []
-                
-        # Claude Pattern: 记录推理过程到 state
+
+        response_text = (
+            response.content if hasattr(response, "content") else str(response)
+        )
+        tool_calls = response.tool_calls if hasattr(response, "tool_calls") else []
+
         reasoning_record = f"**Thought**: 分析任务 '{task_description}'\n"
         if tool_calls:
             for tc in tool_calls:
                 reasoning_record += f"**Action**: 调用工具 `{tc['name']}`\n"
         else:
-            reasoning_record += f"**Final**: 直接生成回答\n"
-        
-        # 返回消息时包含 tool_calls + 推理记录
+            reasoning_record += "**Final**: 直接生成回答\n"
+
         return {
             "messages": [AIMessage(content=response_text, tool_calls=tool_calls)],
-            "reasoning": [reasoning_record]
+            "reasoning": [reasoning_record],
         }
 
-    # 2. Compactor Node
+    # ------------------------------------------------------------------
+    # 2. Compactor Node — trim outputs + detect diminishing returns
+    # ------------------------------------------------------------------
     async def compactor_node(state: AgentState):
-        """Claude Pattern: Prevent context overflow"""
+        """Trim oversized tool outputs and detect diminishing returns.
+
+        Injects a system intervention message if consecutive searches overlap
+        significantly, telling the researcher to stop searching.
+        """
         messages = list(state["messages"])
         if not messages:
             return {}
-            
+
+        current_loop = state.get("loop_count", 0) + 1
+        updates: dict = {"loop_count": current_loop}
+
         last_msg = messages[-1]
-        from langchain_core.messages import ToolMessage
         if isinstance(last_msg, ToolMessage):
             content = str(last_msg.content)
+            tool_name = last_msg.name
+
+            # ----- Detailed tool result logging -----
+            logger.info(
+                "[Compactor] Tool: `%s` | Result length: %d chars",
+                tool_name,
+                len(content),
+            )
+            preview = content[:200]
+            if len(content) > 200:
+                preview += "..."
+            logger.info("[Compactor] Preview (first 200 chars): %s", preview)
+
+            content_lower = content.lower().strip()
+            if len(content.strip()) == 0:
+                logger.warning(
+                    "[Compactor] ⚠️ Tool `%s` returned EMPTY result!", tool_name
+                )
+            elif any(
+                keyword in content_lower
+                for keyword in [
+                    "no results",
+                    "未找到",
+                    "没有找到",
+                    "无结果",
+                    "no documents",
+                    "empty",
+                ]
+            ):
+                logger.warning(
+                    "[Compactor] ⚠️ Tool `%s` indicates 'no results found' or empty data!",
+                    tool_name,
+                )
+
+            # Trim oversized content
             MAX_CHARS = 3000
             if len(content) > MAX_CHARS:
-                trimmed_content = content[:MAX_CHARS] + f"...\n\n[System Note: Content truncated. Original chars: {len(content)}]"
-                last_msg.content = trimmed_content
+                last_msg.content = (
+                    content[:MAX_CHARS]
+                    + f"...\n\n[System Note: Content truncated. Original chars: {len(content)}]"
+                )
 
-        return {"messages": []}
+            # ----- Diminishing returns detection -----
+            tool_messages = [m for m in messages if isinstance(m, ToolMessage)]
+            if len(tool_messages) >= 2:
+                last_text = str(tool_messages[-1].content)[:400]
+                prev_text = str(tool_messages[-2].content)[:400]
+                set_last = set(last_text)
+                set_prev = set(prev_text)
+                if set_last and set_prev:
+                    overlap = len(set_last & set_prev) / len(set_last | set_prev)
+                    if overlap > 0.5:
+                        logger.info(
+                            "[Compactor] ⚠️ Diminishing returns detected (overlap=%.2f). Injecting stop signal.",
+                            overlap,
+                        )
+                        updates["messages"] = [
+                            HumanMessage(
+                                content=(
+                                    "[系统干预] 最近两次检索返回了高度相似的内容（重叠度{:.0%}）。"
+                                    "这表明进一步搜索不会带来新信息。"
+                                    "请在下一轮直接基于已有资料给出回答，不要再调用任何检索工具。"
+                                ).format(overlap)
+                            )
+                        ]
+                        updates["past_steps"] = [
+                            "diminishing_returns_at_{:.2f}".format(overlap)
+                        ]
 
-    # 3. Evaluator Node
-    async def evaluator_node(state: AgentState):
-        """Reflects on the Tool Output against the single sub-task."""
-        from langchain_core.messages import ToolMessage
-        
-        current_loop = state.get("loop_count", 0) + 1
-        
-        observations = [m.content for m in state["messages"] if isinstance(m, ToolMessage)]
-        recent_obs = observations[-1] if observations else "No observation."
-        task_description = state["messages"][0].content
-        
-        # 如果没有任何工具调用，说明不需要检索，直接认为满足
-        has_tool_calls = any(
-            hasattr(m, "tool_calls") and m.tool_calls 
-            for m in state["messages"] 
-            if hasattr(m, "tool_calls")
-        )
-        
-        if not has_tool_calls and not observations:
-            return {"step_satisfied": True, "loop_count": current_loop}
-        
-        # 循环兜底
+        # Max loops guard — force stop regardless
         if current_loop >= MAX_REACT_LOOPS:
-            print(f"[Evaluator] ⚠️ Max iterations ({MAX_REACT_LOOPS}) reached, forcing completion.")
-            return {"step_satisfied": True, "loop_count": current_loop}
-        
-        prompt = f"""
-        请评估以下事实数据是否足够解答给定的小任务块。
-        子任务: {task_description}
-        检索资料: {recent_obs}
-        """
-        
-        eval_llm = llm.with_structured_output(Evaluation, method="function_calling")
-        eval_obj = await eval_llm.ainvoke([HumanMessage(content=prompt)])
-        
-        updates = {"step_satisfied": eval_obj.is_satisfied, "loop_count": current_loop}
-        
-        if not eval_obj.is_satisfied:
-            updates["messages"] = [HumanMessage(content=f"EVALUATOR_FEEDBACK (loop {current_loop}/{MAX_REACT_LOOPS}): {eval_obj.feedback}")]
-            
+            logger.warning(
+                "[Compactor] ⚠️ Max iterations (%d) reached, forcing completion.",
+                MAX_REACT_LOOPS,
+            )
+            updates["messages"] = [
+                HumanMessage(
+                    content=(
+                        "[系统干预] 已达最大检索次数({})。"
+                        "请立即停止检索，直接根据你目前掌握的信息回答用户问题，不要再调用任何工具！"
+                    ).format(MAX_REACT_LOOPS)
+                )
+            ]
+            updates["past_steps"] = updates.get("past_steps", []) + [
+                "max_loops_reached_at_{}".format(MAX_REACT_LOOPS)
+            ]
+
         return updates
 
-    # 4. Routing
-    def route_research_or_eval(state: AgentState) -> Literal["tools", "__end__"]:
+    # ------------------------------------------------------------------
+    # 3. Synthesizer Node — final answer generation (unchanged)
+    # ------------------------------------------------------------------
+    async def synthesizer_node(state: AgentState):
+        """Generate the final comprehensive answer using all collected tool outputs, WITHOUT any tool calls."""
+        task_description = state["messages"][0].content
+
+        # Collect all tool outputs from the message history
+        tool_outputs = []
+        for m in state["messages"]:
+            if isinstance(m, ToolMessage):
+                tool_outputs.append("[工具: {}]\n{}".format(m.name, str(m.content)))
+
+        collected = "\n\n---\n\n".join(tool_outputs) if tool_outputs else "无检索资料"
+
+        system_prompt = (
+            "你是一名冶金领域的研究生。请基于检索到的资料，生成最终的综合回答。绝对不要调用任何工具。\n"
+            "【强制要求】你的回答中必须标注信息来源，格式为：[来源: 文件名, p.页码]。"
+            "引用具体数据时必须注明来源出处。\n"
+            "【长度要求】请生成详尽完整的回答（不少于500字），包含具体数据、分析逻辑、因果解释和来源标注。"
+            "对于涉及机理分析的问题，请展开说明完整的因果链条。"
+        )
+        user_prompt = (
+            "任务: {}\n\n"
+            "以下是从资料库中检索到的相关资料:\n{}\n\n"
+            "请基于以上资料生成综合回答。如果资料不足以回答，请明确指出缺失的信息。\n"
+            "【重要提醒】务必在引用数据时标注来源（如：根据[来源: test.pdf, p.4]的数据显示...）"
+        ).format(task_description, collected)
+
+        logger.info(
+            "[Synthesizer] Generating final answer from %d tool outputs for task: %s...",
+            len(tool_outputs),
+            task_description[:50],
+        )
+
+        msgs = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        response = await llm_without_tools.ainvoke(msgs)
+
+        return {
+            "messages": [
+                AIMessage(
+                    content=response.content
+                    if hasattr(response, "content")
+                    else str(response)
+                )
+            ],
+            "ready_to_synthesize": True,
+            "step_satisfied": True,
+        }
+
+    # ------------------------------------------------------------------
+    # 4. Routing Functions
+    # ------------------------------------------------------------------
+    def route_research_or_eval(state: AgentState) -> Literal["tools", "synthesizer"]:
+        """Route researcher output: tool_calls → tools, otherwise → synthesizer."""
         last_message = state["messages"][-1]
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tools"
-        return "__end__"
-        
-    def route_evaluator_loop(state: AgentState) -> Literal["researcher", "__end__"]:
-        if state["step_satisfied"]:
-            return "__end__"
+        return "synthesizer"
+
+    def route_after_compactor(state: AgentState) -> Literal["researcher"]:
+        """Always route back to researcher after compaction — no evaluator intermediary."""
         return "researcher"
 
-    # [M5] 通过 ToolRegistry 获取全量工具，ToolNode 需要
+    # ------------------------------------------------------------------
+    # 5. Build graph: 4 nodes, no evaluator
+    # ------------------------------------------------------------------
     all_tools = registry.get_all_tools()
     tool_node = ToolNode(all_tools)
 
@@ -181,26 +313,29 @@ def create_worker_graph():
     workflow.add_node("researcher", researcher_node)
     workflow.add_node("tools", tool_node)
     workflow.add_node("compactor", compactor_node)
-    workflow.add_node("evaluator", evaluator_node)
-    
+    workflow.add_node("synthesizer", synthesizer_node)
+
     workflow.set_entry_point("researcher")
     workflow.add_conditional_edges("researcher", route_research_or_eval)
     workflow.add_edge("tools", "compactor")
-    workflow.add_edge("compactor", "evaluator")
-    workflow.add_conditional_edges("evaluator", route_evaluator_loop)
-    
+    workflow.add_conditional_edges("compactor", route_after_compactor)
+    workflow.add_edge("synthesizer", END)
+
     return workflow.compile()
 
+
 async def run_worker_pipeline(payload: dict, task_id: str) -> str:
-    """Async entry wrapper specifically for the SwarmCoordinator or ChatWorker.
-    
-    接通真实 LLM 调用，通过 LangGraph astream_events 驱动完整的
-    Researcher → ToolNode → Compactor → Evaluator ReAct 循环，并将事件推给 SSE。
+    """Async entry wrapper for the SwarmCoordinator or ChatWorker.
+
+    Drives the simplified ReAct loop (researcher → tools → compactor → researcher)
+    via LangGraph astream_events, pushing streaming events to SSE.
     """
     from src.delivery.sse_channel import get_sse_channel
+
     sse = get_sse_channel()
-    
-    graph = create_worker_graph()
+
+    deep_mode = payload.get("deep_mode", False)
+    graph = create_worker_graph(deep_mode=deep_mode)
     state = {
         "messages": [SystemMessage(content=payload["task_description"])],
         "step_satisfied": False,
@@ -208,41 +343,53 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
         "ready_to_synthesize": False,
         "loop_count": 0,
         "reasoning": [],
-        "thinking_config": {"type": "disabled"},
-        "task_id": task_id
+        "thinking_config": {"type": "adaptive", "budget": 32000},
+        "task_id": task_id,
     }
-    
     final_output = ""
+    logger.info(
+        "Starting Worker Pipeline for task_id: %s (deep_mode=%s)", task_id, deep_mode
+    )
+
     try:
-        async for event in graph.astream_events(state, version="v2"):
+        async for event in graph.astream_events(
+            state, version="v2", config={"recursion_limit": 50}
+        ):
             kind = event["event"]
-            
-            # Stream Token 输出
+
+            # Stream LLM token output
             if kind == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
                 if hasattr(chunk, "content") and chunk.content:
                     final_output += chunk.content
                     await sse.async_publish_chat_patch(task_id, chunk.content)
-            
-            # Tool 开始调用
+
+            # Tool invocation notification
             elif kind == "on_tool_start":
                 tool_name = event["name"]
-                await sse.async_publish_chat_patch(task_id, f"\n\n> 🛠️ **正在调用工具检索...** (`{tool_name}`)\n")
-                
-            # Node 完成，检查是不是 Evaluator 发出了驳回
-            elif kind == "on_chain_end" and event["name"] == "evaluator":
-                out_state = event["data"].get("output", {})
-                if out_state and "messages" in out_state:
-                    msgs = out_state["messages"]
-                    for m in msgs:
-                        if hasattr(m, "content") and "EVALUATOR_FEEDBACK" in m.content:
-                            fb = m.content.split(":", 1)[-1].strip()
-                            await sse.async_publish_chat_patch(task_id, f"\n> 🤔 **数据不够充分，思考策略重试中...**\n> 内部反馈: {fb}\n\n")
+                logger.info(
+                    "[Worker Pipeline] 🛠️ Tool Invoked: %s with inputs: %s",
+                    tool_name,
+                    event.get("data", {}).get("input"),
+                )
+                await sse.async_publish_chat_patch(
+                    task_id,
+                    "\n\n> 🛠️ **正在调用工具检索...** (`{}`)\n".format(tool_name),
+                )
 
         if not final_output:
+            logger.warning(
+                "[Worker Pipeline] Completed but produced no textual output for task %s",
+                task_id,
+            )
             return "Worker completed but produced no textual output."
+
+        logger.info("[Worker Pipeline] Successfully completed task %s", task_id)
         return final_output
+
     except Exception as e:
-        print(f"[Worker Pipeline] ❌ Execution failed: {e}")
-        await sse.async_publish_chat_patch(task_id, f"\n\n> ❌ **管线执行异常**: {e}\n")
-        return f"[Worker Error] {e}"
+        logger.error("[Worker Pipeline] ❌ Execution failed: %s", e, exc_info=True)
+        await sse.async_publish_chat_patch(
+            task_id, "\n\n> ❌ **管线执行异常**: {}\n".format(e)
+        )
+        return "[Worker Error] {}".format(e)

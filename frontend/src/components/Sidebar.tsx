@@ -73,7 +73,7 @@ const Sidebar: React.FC<Props> = ({ documents, selectedId, onSelect, onRefresh, 
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:8000/api/v1/upload_pdf', {
+      const res = await fetch('/api/v1/upload_pdf', {
         method: 'POST',
         body: formData,
       });

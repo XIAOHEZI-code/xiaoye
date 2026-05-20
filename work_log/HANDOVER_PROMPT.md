@@ -47,12 +47,12 @@ Xiaoye 是一个专门针对【冶金工程开发人员】的高并发、强容�
 * **M2 — 沉浸式前端搭建** ✅：Vite/React/TS 暗黑毛玻璃三栏布局。
 * **M3 — 异步级联分发** ✅：FastAPI BackgroundTasks + SSE + Redis PubSub 全链路打通。
 * **M4 — 主动求问 + 记忆引擎** ✅：AskUser UI + .xiaoye_memory/ + 气泡化对话 + 状态轮询。
+* **M5 — 四管线架构重构与 GraphRAG 入库与可视化** ✅：实现四管线解耦。IngestionPipeline 实现原生管线编排（抽取三元组串联写入 Neo4j）。同时，在前端利用 `react-force-graph-2d` 实现了全景知识图谱的动态可视化界面，并打通了 `/api/v1/graph` 接口。
 
-### M5 冲刺目标（待启动）
+### M6 冲刺目标（待启动）
 1. **物理化学 Code Sandbox 计算仪**：挂载安全的 Python 沙盒，Agent 可编写并执行物化计算代码，沙盒跑完后再拼回主面板。
-2. **知识图谱可视化**：利用 Neo4j 已有的图数据库，在前端增加知识图谱交互视图。
-3. **多用户会话隔离**：引入用户认证，实现文档/记忆/对话的多租户隔离。
-4. **生产部署流水线**：Docker Compose 完整编排（含 ES 健康检查）+ Nginx 反向代理 + HTTPS。
+2. **多用户会话隔离**：引入用户认证，实现文档/记忆/对话的多租户隔离。
+3. **生产部署流水线**：Docker Compose 完整编排（含 ES 健康检查）+ Nginx 反向代理 + HTTPS。
 
 ---
 

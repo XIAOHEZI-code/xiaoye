@@ -16,13 +16,24 @@ import json
 import os
 import redis.asyncio as redis
 from src.core.config import settings
-from src.delivery.memory import load_preload_context, extract_and_save_memory, init_global_memory
+from src.delivery.memory import (
+    load_preload_context,
+    extract_and_save_memory,
+    init_global_memory,
+)
 from src.api.askuser_routes import trigger_ask_user, wait_for_user_reply
 
 
 def _clear_proxy():
     """清除代理环境变量，确保直连 Aliyun Dashscope"""
-    for key in ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"]:
+    for key in [
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+    ]:
         os.environ.pop(key, None)
     os.environ["OPENAI_API_KEY"] = settings.QWEN_API_KEY
     os.environ["OPENAI_API_BASE"] = settings.QWEN_BASE_URL
@@ -33,6 +44,7 @@ async def dispatch_chat_worker(
     message: str,
     document_id: str | None,
     history: list,
+    deep_mode: bool = False,
 ):
     """
     主对话 Worker。接入文献检索技能 (search_metallurgy_text) 并流式推送回复。
@@ -52,6 +64,7 @@ async def dispatch_chat_worker(
 
     async with redis_client as r:
         from src.delivery.sse_channel import get_sse_channel
+
         sse = get_sse_channel()
 
         # ── Step 0: 从硬盘态记忆加载历史上下文 ────────────────────────────────
@@ -64,12 +77,13 @@ async def dispatch_chat_worker(
 
         # ── Step 2: 组装任务描述 (Task Description) ──────────────────────────────
         # 记忆前缀（注入到所有模式）
-        memory_prefix = f"\n\n【长程记忆】\n{memory_context}\n" if memory_context else ""
+        memory_prefix = (
+            f"\n\n【长程记忆】\n{memory_context}\n" if memory_context else ""
+        )
         history_str = (
-            "\n".join([
-                f"用户: {h['user']}\n小冶: {h['assistant']}"
-                for h in history[-6:]
-            ])
+            "\n".join(
+                [f"用户: {h['user']}\n小冶: {h['assistant']}" for h in history[-6:]]
+            )
             if history
             else ""
         )
@@ -87,21 +101,38 @@ async def dispatch_chat_worker(
             )
         else:
             # 模式 B/C: 文献检索增强 / 通用知识问答
-            task_description = (
-                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
-                "现在你需要回答导师的问题。如果需要事实支持，请自主调用合适的检索工具（例如 search_metallurgy_text 等）查找资料。\n"
-                "**强制要求**：\n"
-                "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
-                "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
-                f"{memory_prefix}\n"
-                f"【对话历史】\n{history_str}\n\n"
-                f"【导师（用户）问题】\n{message}"
-            )
+            if deep_mode:
+                task_description = (
+                    "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
+                    "【深度模式已激活】：本次对话将启动高级知识图谱增强检索(HyDE)。"
+                    "你必须**立即调用 search_available_tools 工具**加载图谱增强检索后，再进行解答。"
+                    "深度模式下，请给出详尽分析（不少于800字），包含完整的因果链条和机制解释。\n"
+                    "**强制要求**：\n"
+                    "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
+                    "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
+                    f"{memory_prefix}\n"
+                    f"【对话历史】\n{history_str}\n\n"
+                    f"【导师（用户）问题】\n{message}"
+                )
+            else:
+                task_description = (
+                    "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
+                    "现在你需要回答导师的问题。如果需要事实支持，请自主调用基础检索工具查找资料。\n"
+                    "【高级工具加载原则】：如果你发现问题涉及复杂的冶金机理、工艺因果关系，或是基础检索找不到答案，你**必须首先调用 search_available_tools 工具**，搜索并挂载高级图谱增强(HyDE)或代码沙盒工具后，再进行解答！\n"
+                    "【快速模式】：优先使用基础检索回答。仅在基础检索确实找不到相关资料时，才调用 search_available_tools 加载高级工具。\n"
+                    "**强制要求**：\n"
+                    "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
+                    "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
+                    f"{memory_prefix}\n"
+                    f"【对话历史】\n{history_str}\n\n"
+                    f"【导师（用户）问题】\n{message}"
+                )
 
         # ── Step 3: 调用 Reasoning 智能体管线 (取代原硬编码) ────────────────────
         from src.reasoning.graph import run_worker_pipeline
-        payload = {"task_description": task_description}
-        
+
+        payload = {"task_description": task_description, "deep_mode": deep_mode}
+
         # 运行图并自动获取 SSE 推送
         full_response = await run_worker_pipeline(payload, task_id)
 

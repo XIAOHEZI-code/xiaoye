@@ -16,24 +16,34 @@ from typing import Optional
 
 # 冶金图表分类体系 (Based on user input)
 METALLURGY_CATEGORIES = [
-    "基础热力学与物理化学图表", # e.g. 相图, 埃林汉姆图, 溶解度曲线
-    "传输过程与数值模拟图",   # e.g. 流场/温度场/浓度场, 网格划分图
-    "宏观过程控制与时序监测图", # e.g. 过程参数波动图, PFD/P&ID, 质量控制图
-    "微观组织与多模态表征图谱"  # e.g. OM/SEM/TEM, 面分布/衍射图谱(XRD/EBSD)
+    "基础热力学与物理化学图表",  # e.g. 相图, 埃林汉姆图, 溶解度曲线
+    "传输过程与数值模拟图",  # e.g. 流场/温度场/浓度场, 网格划分图
+    "宏观过程控制与时序监测图",  # e.g. 过程参数波动图, PFD/P&ID, 质量控制图
+    "微观组织与多模态表征图谱",  # e.g. OM/SEM/TEM, 面分布/衍射图谱(XRD/EBSD)
 ]
 
 
 class ImageEvaluationResult(BaseModel):
     """图像分析的结构化输出"""
-    category: str = Field(description=f"Must be one of: {', '.join(METALLURGY_CATEGORIES)}")
-    sub_category: str = Field(description="更具体的子分类，例如：相图、SEM、过程参数折线图等")
-    description: str = Field(description="图表说明了什么冶金现象或工艺参数。提供不少于100字的详尽描述。")
-    key_metrics: list[str] = Field(description="提取出的关键数值或材料型号列表", default_factory=list)
+
+    category: str = Field(
+        description=f"Must be one of: {', '.join(METALLURGY_CATEGORIES)}"
+    )
+    sub_category: str = Field(
+        description="更具体的子分类，例如：相图、SEM、过程参数折线图等"
+    )
+    description: str = Field(
+        description="图表说明了什么冶金现象或工艺参数。提供不少于100字的详尽描述。"
+    )
+    key_metrics: list[str] = Field(
+        description="提取出的关键数值或材料型号列表", default_factory=list
+    )
 
 
 # =============================================================
 #  基础分析（向后兼容）
 # =============================================================
+
 
 def analyze_metallurgy_image(image_base64: str) -> ImageEvaluationResult:
     """
@@ -56,6 +66,7 @@ def analyze_metallurgy_image(image_base64: str) -> ImageEvaluationResult:
 # =============================================================
 #  上下文感知分析（新接口） - 参考 RAGFlow VisionFigureParser
 # =============================================================
+
 
 def analyze_metallurgy_image_with_context(
     image_base64: str,
@@ -81,7 +92,7 @@ def analyze_metallurgy_image_with_context(
         结构化的图像分析结果
     """
     chat = ChatOpenAI(
-        model="qwen3-vl-plus",
+        model="qwen-vl-max",
         api_key=settings.QWEN_API_KEY,
         base_url=settings.QWEN_BASE_URL,
         max_tokens=1000,
@@ -97,7 +108,10 @@ def analyze_metallurgy_image_with_context(
     msg = HumanMessage(
         content=[
             {"type": "text", "text": prompt_text},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}},
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+            },
         ]
     )
 
@@ -116,7 +130,7 @@ def analyze_metallurgy_image_with_context(
             category="未分类",
             sub_category="未知",
             description=response.content[:200],
-            key_metrics=[]
+            key_metrics=[],
         )
 
 
@@ -146,7 +160,11 @@ def _build_context_aware_prompt(
         context_parts.append(f"【下文参考】\n{context_below[:300]}")
 
     context_section = "\n\n".join(context_parts)
-    context_block = f"\n\n---\n以下信息来自论文上下文，请结合分析：\n{context_section}\n---\n" if context_parts else ""
+    context_block = (
+        f"\n\n---\n以下信息来自论文上下文，请结合分析：\n{context_section}\n---\n"
+        if context_parts
+        else ""
+    )
 
     full_prompt = f"""
 你是一个极其资深的冶金领域的材料专家。请分析这张图片/图表。

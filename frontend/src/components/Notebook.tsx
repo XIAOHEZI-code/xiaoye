@@ -5,7 +5,9 @@ import remarkGfm from 'remark-gfm';
 interface Props {
   content: string;
   thinkingContent?: string;  // SSE 推送的思维链内容
-  onChatSubmit: (message: string) => void;
+  onChatSubmit: (message: string, deepMode: boolean) => void;
+  deepMode: boolean;
+  onDeepModeToggle: (deepMode: boolean) => void;
 }
 
 /**
@@ -34,7 +36,7 @@ function parseMessages(raw: string): ChatMessage[] {
   });
 }
 
-const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) => {
+const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit, deepMode, onDeepModeToggle }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showThinking, setShowThinking] = useState(false);
@@ -55,10 +57,9 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
 
   const handleSend = () => {
     const el = textareaRef.current;
-    if (el && el.value.trim()) {
-      onChatSubmit(el.value.trim());
-      el.value = '';
-    }
+    if (!el || !el.value.trim()) return;
+    onChatSubmit(el.value.trim(), deepMode);
+    el.value = '';
   };
 
   const hasThinking = thinkingContent && thinkingContent.trim().length > 0;
@@ -285,6 +286,42 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
             }
           }}
         />
+        {/* 深度模式切换 */}
+        <button
+          onClick={() => onDeepModeToggle(!deepMode)}
+          title={deepMode ? "深度模式已启用：知识图谱增强检索 + 详尽分析" : "点击启用深度模式：启用知识图谱增强检索(HyDE)"}
+          style={{
+            position: 'absolute',
+            bottom: '10px',
+            right: '90px',
+            background: deepMode ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)',
+            border: deepMode ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid var(--glass-border)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            color: deepMode ? 'rgba(59, 130, 246, 0.9)' : 'var(--text-muted)',
+            fontSize: '0.75rem',
+            cursor: 'pointer',
+            fontWeight: deepMode ? 600 : 400,
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            boxShadow: deepMode ? '0 0 8px rgba(59, 130, 246, 0.15)' : 'none',
+          }}
+        >
+          {deepMode ? (
+            <>
+              <span style={{
+                display: 'inline-block', width: '5px', height: '5px',
+                borderRadius: '50%', background: '#3b82f6',
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }} />
+              🧠 深度
+            </>
+          ) : (
+            <>🧠 深度</>
+          )}
+        </button>
         {/* 发送按钮 */}
         <button
           style={{

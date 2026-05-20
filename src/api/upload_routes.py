@@ -14,6 +14,10 @@ import os
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from src.core.logger import setup_logger
+
+logger = setup_logger("xiaoye.upload")
+
 from src.core.config import settings
 from src.db.session import get_db
 from src.models.document import DocumentMetadata
@@ -58,15 +62,18 @@ async def upload_pdf(
     3. 若不存在：保存文件 → 写入 DB(pending) → 后台触发索引管线
     """
     if not file.filename or not file.filename.endswith(".pdf"):
+        logger.warning(f"Rejected invalid file upload: {file.filename}")
         raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
 
     content = await file.read()
+    logger.info(f"Received upload request for file: {file.filename} (Size: {len(content)} bytes)")
     from src.ingestion.dedup import DedupChecker
     file_hash = DedupChecker.compute_hash(content)
 
     # 防重检查
     existing = DedupChecker.check_existing(file_hash)
     if existing:
+        logger.info(f"Fast resume hit for {file.filename} -> doc_id: {existing['id']}")
         return {
             "status": "fast_resume",
             "message": "File already exists",
@@ -92,6 +99,7 @@ async def upload_pdf(
     db.commit()
 
     # 触发后台索引管线
+    logger.info(f"Triggering ingestion pipeline for {doc_id} ({file.filename})")
     background_tasks.add_task(run_ingestion_pipeline_task, doc_id, real_path, file.filename)
 
     return {
