@@ -249,6 +249,21 @@ function App() {
     };
   }, []);
 
+  // 僵尸任务自动清理：超过 90 秒未完成的 activeTasks 自动移除
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setActiveTasks(prev => {
+        const cleaned = prev.filter(t => now - (t.timestamp ?? now) < 90_000);
+        if (cleaned.length < prev.length) {
+          console.warn(`[ActiveTasks] Auto-cleaned ${prev.length - cleaned.length} zombie task(s)`);
+        }
+        return cleaned.length < prev.length ? cleaned : prev;
+      });
+    }, 10_000); // 每 10 秒检查一次
+    return () => clearInterval(interval);
+  }, []);
+
   // 加载已上传的PDF列表（可被主动调用刷新）
   const fetchDocuments = async () => {
     try {
