@@ -108,7 +108,43 @@ run_m1_test.py
 # Document directory (drawio / docx binaries)
 document/
 
-# Project documentation folders (explicitly tracked)
-!日志信息/
-!架构设计/
-!工作日报/
+# ── 以下为本地开发产物，云端仓库只放纯代码 ──
+
+# Paper / 文档 / 日报（本地保留，不推远程）
+paper/
+工作日报/
+架构设计/
+
+# AI agent / memory cache
+.agent/
+.xiaoye_memory/
+.gemini/
+
+# Experiment & scratch scripts & tests
+kg_experiments/
+scripts/
+tests/
+temp/
+test_*.py
+generate_chart.py
+scratch_*.py
+frontend/debug_puppeteer.js
+
+# Marker / test output (large binary)
+test_marker_output/
+
+# Frontend public assets (pdfjs cmaps/fonts, tracked in npm)
+frontend/public/pdf-assets/
+frontend/src/assets/
+
+# Misc one-off files
+Dockerfile
+DEVELOPMENT_PROTOCOL.md
+_archive/
+create_db.py
+environment.yml
+requirements*.txt
+requirements*.lock
+run_backend.sh
+start_server.sh
+start_without_proxy.py
