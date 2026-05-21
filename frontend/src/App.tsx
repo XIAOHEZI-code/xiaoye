@@ -99,6 +99,8 @@ function App() {
   const [deepMode, setDeepMode] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>(loadSessionId);
+  // 引用跳转状态：{page, key} — key 用于重复点击同一页时也能重新触发
+  const [citationTarget, setCitationTarget] = useState<{page: number, key: number} | null>(null);
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -405,6 +407,18 @@ function App() {
     ? documents.find(d => d.id === knowledgeDocId)?.filename
     : null;
 
+  // 引用角标点击回调：Notebook → PdfViewer 页码跳转
+  const handleCitationClick = useCallback((pageNumber: number, docId?: string) => {
+    // 如果指定了 docId，先加载对应文档的 PDF
+    if (docId && docId !== currentDocumentId) {
+      setPdfUrl(`/api/v1/documents/${docId}/pdf`);
+      setPdfSourceType('retrieved');
+      setCurrentDocumentId(docId);
+    }
+    // 设置跳转目标（用 Date.now() 作 key，确保重复点击同一页也会触发）
+    setCitationTarget({ page: pageNumber, key: Date.now() });
+  }, [currentDocumentId]);
+
   return (
     <>
       {/* 主题切换按钮 */}
@@ -478,6 +492,8 @@ function App() {
               onDocumentIdChange={handleDocumentIdChange}
               pdfUrl={pdfUrl}
               sourceType={pdfSourceType}
+              targetPage={citationTarget?.page ?? null}
+              key={citationTarget?.key}
             />
           </div>
         </div>
@@ -545,6 +561,7 @@ function App() {
               onChatSubmit={handleUserChat}
               deepMode={deepMode}
               onDeepModeToggle={setDeepMode}
+              onCitationClick={handleCitationClick}
             />
           </div>
         </div>

@@ -28,9 +28,10 @@ interface Props {
   onDocumentIdChange: (id: string | null) => void;
   pdfUrl?: string | null;                // 从服务端加载的 PDF URL
   sourceType?: 'uploaded' | 'retrieved'; // 来源类型：上传=蓝底纹，检索=无底纹
+  targetPage?: number | null;            // 外部指令：跳转到指定页码（由引用角标触发）
 }
 
-const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, sourceType = 'uploaded' }) => {
+const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, sourceType = 'uploaded', targetPage }) => {
   const { showToast } = useToast();
   const [file, setFile] = useState<File | string | null>(null); // File 或 URL string
   const [numPages, setNumPages] = useState<number>(0);
@@ -67,6 +68,18 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
       }
     }
   }, [pdfUrl, sourceType]);
+
+  // 外部跳转指令：当 targetPage 变化时自动翻页 + 闪烁动画
+  const [jumpFlash, setJumpFlash] = React.useState(false);
+  React.useEffect(() => {
+    if (targetPage && targetPage > 0 && targetPage <= numPages) {
+      setPageNumber(targetPage);
+      // 触发页面闪烁高亮效果
+      setJumpFlash(true);
+      const timer = setTimeout(() => setJumpFlash(false), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [targetPage]);
 
   async function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const { files } = event.target;
@@ -292,6 +305,18 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
               transition: 'filter 0.2s ease',
             }}
           >
+            {/* 引用跳转闪烁高亮覆盖层 */}
+            {jumpFlash && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'rgba(250, 204, 21, 0.15)',
+                pointerEvents: 'none',
+                zIndex: 2,
+                borderRadius: '4px',
+                animation: 'citationFlash 1.2s ease-out forwards',
+              }} />
+            )}
             {/* 蓝色底纹覆盖层：仅用户上传的文档显示 */}
             {currentSourceType === 'uploaded' && (
               <div style={{
@@ -347,6 +372,16 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
           </div>
         )}
       </div>
+
+      {/* 引用跳转闪烁动画 */}
+      <style>{`
+        @keyframes citationFlash {
+          0% { opacity: 1; }
+          30% { opacity: 0.6; }
+          60% { opacity: 0.3; }
+          100% { opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 };
