@@ -16,6 +16,7 @@ interface Props {
   onSelect: (id: string) => void;
   onRefresh: () => void;
   onDocumentUploaded?: (docId: string) => void;
+  onDeleteDocument?: (docId: string) => void;      // 删除文档回调
   retrievalSources?: RetrievalSource[];           // AI 检索命中的文献
   onRetrievedSelect?: (docId: string) => void;    // 点击检索文献的回调
   chatSessions?: ChatSession[];
@@ -25,30 +26,58 @@ interface Props {
   onDeleteSession?: (taskId: string) => void;
 }
 
-const STATUS_MAP: Record<string, { color: string; label: string }> = {
-  ready:   { color: 'var(--success)',        label: '就绪' },
-  pending: { color: 'var(--status-pending)', label: '处理中' },
-  failed:  { color: 'var(--status-error)',   label: '失败' },
+const STATUS_MAP: Record<string, { color: string; label: string; pulsing?: boolean }> = {
+  ready:    { color: 'var(--success)',        label: '就绪' },
+  pending:  { color: 'var(--status-pending)', label: '等待处理', pulsing: true },
+  parsing:  { color: '#f59e0b',               label: '解析PDF中', pulsing: true },
+  chunking: { color: '#f59e0b',               label: '文本分块中', pulsing: true },
+  figures:  { color: '#f59e0b',               label: '图片处理中', pulsing: true },
+  indexing: { color: '#8b5cf6',               label: '向量索引中', pulsing: true },
+  graphing: { color: '#8b5cf6',               label: '图谱抽取中', pulsing: true },
+  failed:   { color: 'var(--status-error)',   label: '失败' },
 };
 
 const Sidebar: React.FC<Props> = ({
-  documents, selectedId, onSelect, onRefresh, onDocumentUploaded,
+  documents, selectedId, onSelect, onRefresh, onDocumentUploaded, onDeleteDocument,
   retrievalSources, onRetrievedSelect,
   chatSessions, currentSessionId, onNewSession, onSwitchSession, onDeleteSession,
 }) => {
   const { showToast } = useToast();
   const [uploading, setUploading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // 自动轮询：当有 pending 状态的文档时，每 8 秒刷新一次
-  const hasPending = documents.some(d => d.status === 'pending');
+  // 删除文档（带确认弹窗）
+  const handleDeleteDocument = async (docId: string, filename: string) => {
+    if (!confirm(`确定删除「${filename}」？\n将同时清理 ES 索引、Neo4j 图谱和磁盘文件。`)) return;
+    setDeletingId(docId);
+    try {
+      const res = await fetch(`/api/v1/documents/${docId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`✅ 已删除：${filename}（${data.cleaned?.join(', ')}）`, 'success', 4000);
+        onDeleteDocument?.(docId);
+        await onRefresh();
+      } else {
+        showToast(`删除失败：${data.detail || '未知错误'}`, 'error');
+      }
+    } catch {
+      showToast('删除失败，请检查后端服务', 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // 自动轮询：当有处理中状态的文档时，每 8 秒刷新一次
+  const TERMINAL_STATES = ['ready', 'failed'];
+  const hasInProgress = documents.some(d => !TERMINAL_STATES.includes(d.status));
   useEffect(() => {
-    if (!hasPending) return;
+    if (!hasInProgress) return;
     const interval = setInterval(() => {
       onRefresh();
     }, 8000);
     return () => clearInterval(interval);
-  }, [hasPending, onRefresh]);
+  }, [hasInProgress, onRefresh]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '';
@@ -227,6 +256,7 @@ const Sidebar: React.FC<Props> = ({
         ) : (
           documents.map((doc) => {
             const statusInfo = STATUS_MAP[doc.status] ?? { color: '#94a3b8', label: doc.status };
+            const isDeleting = deletingId === doc.id;
             return (
               <div
                 key={doc.id}
@@ -242,9 +272,10 @@ const Sidebar: React.FC<Props> = ({
                     ? '1px solid var(--accent)'
                     : '1px solid transparent',
                   transition: 'all 0.15s ease',
+                  opacity: isDeleting ? 0.4 : 1,
                 }}
               >
-                {/* 文件名 + 状态行 — Flex 对齐 */}
+                {/* 文件名 + 删除按钮 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px' }}>
                   <FileText size={13} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                   <span style={{
@@ -258,8 +289,39 @@ const Sidebar: React.FC<Props> = ({
                   }}>
                     {doc.filename}
                   </span>
+                  {/* 删除按钮 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteDocument(doc.id, doc.filename);
+                    }}
+                    disabled={isDeleting}
+                    title={`删除 ${doc.filename}（级联清理 ES + Neo4j + 磁盘）`}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: isDeleting ? 'default' : 'pointer',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      opacity: 0.3,
+                      transition: 'opacity 0.15s, color 0.15s',
+                      flexShrink: 0,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.color = 'var(--status-error)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.opacity = '0.3';
+                      e.currentTarget.style.color = 'var(--text-muted)';
+                    }}
+                  >
+                    {isDeleting ? <Loader size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={11} />}
+                  </button>
                 </div>
-                {/* 次要信息行 — 左状态 右日期，严格对齐 */}
+                {/* 次要信息行 — 左状态 右日期 */}
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -274,6 +336,7 @@ const Sidebar: React.FC<Props> = ({
                       borderRadius: '50%',
                       background: statusInfo.color,
                       flexShrink: 0,
+                      animation: statusInfo.pulsing ? 'pulse 1.5s ease-in-out infinite' : 'none',
                     }} />
                     <span style={{ color: 'var(--text-muted)', opacity: 0.8 }}>{statusInfo.label}</span>
                   </span>

@@ -54,24 +54,29 @@ class IngestionPipeline:
         db = SessionLocal()
         try:
             # ── Step 1: Marker PDF → Markdown ──────────────────────────
+            self._update_db_status(db, "parsing")
             md_text, image_paths, out_metadata = self._step_parse_pdf()
             if md_text is None:
                 self._update_db_status(db, "failed")
                 return
 
             # ── Step 2: 文本分块 ──────────────────────────────────────
+            self._update_db_status(db, "chunking")
             text_chunks = self._step_chunk_text(md_text, out_metadata)
 
             # ── Step 3: 图片处理 ──────────────────────────────────────
+            self._update_db_status(db, "figures")
             figure_chunks = self._step_process_figures(md_text, image_paths)
 
             # ── Step 4: ES 向量化写入 ─────────────────────────────────
+            self._update_db_status(db, "indexing")
             success = self._step_index_to_es(text_chunks, figure_chunks)
             if not success:
                 self._update_db_status(db, "failed")
                 return
 
             # ── Step 5: 知识图谱抽取与写入 ────────────────────────────
+            self._update_db_status(db, "graphing")
             self._step_extract_knowledge_graph(text_chunks)
 
             # ── Step 6: 更新状态 ──────────────────────────────────────

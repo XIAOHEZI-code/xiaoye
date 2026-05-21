@@ -220,6 +220,12 @@ function App() {
           return;
         }
 
+        // 入库进度推送 — 实时刷新文档列表以显示细粒度状态
+        if (data.type === 'ingestion_progress') {
+          fetchDocuments();
+          return;
+        }
+
         if (data.type === 'reasoning' && data.thinking) {
           setThinkingContent(prev => prev + data.thinking);
         } else if (data.patch) {
@@ -613,6 +619,14 @@ function App() {
             onDocumentUploaded={(docId) => {
               setKnowledgeDocId(docId);
               setCurrentDocumentId(docId);
+            }}
+            onDeleteDocument={(docId) => {
+              // 删除后清理选中状态
+              if (knowledgeDocId === docId) setKnowledgeDocId(null);
+              if (currentDocumentId === docId) {
+                setCurrentDocumentId(null);
+                setPdfUrl(null);
+              }
             }}
             retrievalSources={retrievalSources}
             onRetrievedSelect={(docId) => {
