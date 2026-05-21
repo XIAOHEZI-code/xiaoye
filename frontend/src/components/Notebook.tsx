@@ -1,11 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface Props {
   content: string;
   thinkingContent?: string;  // SSE 推送的思维链内容
-  onChatSubmit: (message: string) => void;
+  onChatSubmit: (message: string, deepMode: boolean) => void;
+  deepMode: boolean;
+  onDeepModeToggle: (deepMode: boolean) => void;
+  onCitationClick?: (pageNumber: number, docId?: string) => void;  // 引用角标点击回调
 }
 
 /**
@@ -34,7 +40,171 @@ function parseMessages(raw: string): ChatMessage[] {
   });
 }
 
-const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) => {
+/**
+ * 预处理 LaTeX 文本：将常见的非标准 LaTeX 分隔符转换为标准格式
+ * - \[...\] → $$...$$  (块级公式)
+ * - \(...\) → $...$    (行内公式)
+ * - [ ... ] 独立行的也尝试转换（常见于 AI 输出）
+ */
+function preprocessLatex(text: string): string {
+  // \[...\] → $$...$$ (块级)
+  let result = text.replace(/\\\[([\s\S]*?)\\\]/g, (_match, p1) => `$$${p1}$$`);
+  // \(...\) → $...$ (行内)
+  result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_match, p1) => `$${p1}$`);
+  return result;
+}
+
+/**
+ * 分离 AI 回复中的工具调用状态日志与正文
+ */
+function separateStatusAndBody(content: string): { statusText: string; bodyText: string } {
+  const lines = content.split('\n');
+  const statusLines: string[] = [];
+  const bodyLines: string[] = [];
+  let passedStatus = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!passedStatus && (
+      trimmed.startsWith('> 🔍') ||
+      trimmed.startsWith('> ⚙️') ||
+      trimmed.startsWith('> 🧪') ||
+      trimmed.startsWith('> 📊') ||
+      trimmed.startsWith('> 🔄') ||
+      trimmed.startsWith('> 🛠️') ||
+      trimmed.match(/^>\s*\*.*\*\s*$/) ||
+      trimmed.match(/^\*.*正在.*\*$/) ||
+      trimmed.match(/^test\s*>/) ||
+      trimmed.match(/^>\s*[a-z_]+\s*>/) ||
+      trimmed === ''
+    )) {
+      statusLines.push(line);
+    } else {
+      passedStatus = true;
+      bodyLines.push(line);
+    }
+  }
+  return {
+    statusText: statusLines.filter(l => l.trim()).join('\n'),
+    bodyText: bodyLines.join('\n').trim(),
+  };
+}
+
+/**
+ * 解析文本中的 [来源: xxx.pdf, p.N] 标注，渲染为可点击的蓝色角标按钮
+ */
+const CITATION_REGEX = /\[来源:\s*([^,\]]+?)(?:,\s*p\.?(\d+))?\]/g;
+
+const CitationText: React.FC<{
+  text: string;
+  onCitationClick?: (pageNumber: number, docId?: string) => void;
+}> = ({ text, onCitationClick }) => {
+  if (!onCitationClick) return <>{text}</>;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(CITATION_REGEX.source, 'g');
+
+  while ((match = regex.exec(text)) !== null) {
+    // 前缀纯文本
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const filename = match[1].trim();
+    const page = match[2] ? parseInt(match[2], 10) : null;
+    const label = page ? `📎 ${filename} p.${page}` : `📎 ${filename}`;
+
+    parts.push(
+      <button
+        key={`cite-${match.index}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (page) onCitationClick(page);
+        }}
+        title={page ? `点击跳转到 ${filename} 第 ${page} 页` : filename}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          padding: '1px 8px',
+          margin: '0 2px',
+          background: 'rgba(59, 130, 246, 0.12)',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: '4px',
+          color: '#60a5fa',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          cursor: page ? 'pointer' : 'default',
+          verticalAlign: 'middle',
+          lineHeight: 1.4,
+          transition: 'all 0.15s ease',
+          textDecoration: 'none',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)';
+          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.12)';
+          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+        }}
+      >
+        {label}
+      </button>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
+};
+
+/**
+ * 可复用的 Markdown 渲染组件（含 LaTeX 支持 + 引用角标点击跳转）
+ */
+const MarkdownRenderer: React.FC<{
+  content: string;
+  className?: string;
+  onCitationClick?: (pageNumber: number, docId?: string) => void;
+}> = ({ content, className, onCitationClick }) => {
+  const processed = preprocessLatex(content);
+  return (
+    <div className={className}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          // 拦截所有文本节点，将其中的 [来源: ...] 标注替换为可点击组件
+          p: ({ children, ...props }) => (
+            <p {...props}>
+              {React.Children.map(children, child =>
+                typeof child === 'string'
+                  ? <CitationText text={child} onCitationClick={onCitationClick} />
+                  : child
+              )}
+            </p>
+          ),
+          li: ({ children, ...props }) => (
+            <li {...props}>
+              {React.Children.map(children, child =>
+                typeof child === 'string'
+                  ? <CitationText text={child} onCitationClick={onCitationClick} />
+                  : child
+              )}
+            </li>
+          ),
+        }}
+      >
+        {processed}
+      </ReactMarkdown>
+    </div>
+  );
+};
+
+const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit, deepMode, onDeepModeToggle, onCitationClick }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showThinking, setShowThinking] = useState(false);
@@ -55,10 +225,9 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
 
   const handleSend = () => {
     const el = textareaRef.current;
-    if (el && el.value.trim()) {
-      onChatSubmit(el.value.trim());
-      el.value = '';
-    }
+    if (!el || !el.value.trim()) return;
+    onChatSubmit(el.value.trim(), deepMode);
+    el.value = '';
   };
 
   const hasThinking = thinkingContent && thinkingContent.trim().length > 0;
@@ -70,69 +239,35 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '12px' }}>
 
       {/* 思维链折叠面板 */}
-      <div>
+      <div className="thinking-panel-wrapper">
         <button
           onClick={() => setShowThinking(!showThinking)}
-          style={{
-            background: hasThinking ? 'var(--accent-light)' : 'rgba(0,0,0,0.2)',
-            border: `1px solid ${hasThinking ? 'var(--accent)' : 'var(--glass-border)'}`,
-            borderRadius: '4px',
-            padding: '5px 12px',
-            color: hasThinking ? 'var(--accent)' : 'var(--text-muted)',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            transition: 'all 0.2s',
-          }}
+          className={`thinking-toggle-btn ${hasThinking ? 'has-content' : ''} ${showThinking ? 'expanded' : ''}`}
         >
           {/* 有内容时显示脉冲指示点 */}
           {hasThinking && (
-            <span style={{
-              display: 'inline-block',
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: 'var(--accent)',
-              animation: 'pulse 1.5s ease-in-out infinite',
-              flexShrink: 0,
-            }} />
+            <span className="thinking-pulse-dot" />
           )}
+          <span className="thinking-toggle-icon">
+            {showThinking ? '▾' : '▸'}
+          </span>
           {showThinking ? '🧠 收起推理过程' : `💭 ${hasThinking ? '查看推理过程' : '推理过程（空）'}`}
         </button>
 
-        {showThinking && (
-          <div style={{
-            marginTop: '8px',
-            padding: '12px',
-            background: 'rgba(0, 0, 0, 0.35)',
-            borderRadius: '6px',
-            border: '1px solid var(--glass-border)',
-            maxHeight: '180px',
-            overflowY: 'auto',
-            fontSize: '0.78rem',
-            color: 'var(--text-muted)',
-            fontFamily: 'monospace',
-            lineHeight: 1.5,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-          }}>
-            <div style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              marginBottom: '8px',
-              color: 'var(--accent)',
-              letterSpacing: '0.05em',
-            }}>
+        <div className={`thinking-content-panel ${showThinking ? 'open' : ''}`}>
+          <div className="thinking-content-inner">
+            <div className="thinking-header-label">
               ── AI 推理链 (Thinking) ──
             </div>
-            {hasThinking
-              ? thinkingContent
-              : <span style={{ opacity: 0.5 }}>暂无推理内容。触发 Fork Agent 后将在此显示思维链...</span>
-            }
+            {hasThinking ? (
+              <div className="thinking-text">
+                <MarkdownRenderer content={thinkingContent!} />
+              </div>
+            ) : (
+              <span style={{ opacity: 0.5 }}>暂无推理内容。触发深度模式或 Fork Agent 后将在此显示思维链...</span>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* 消息气泡列表 */}
@@ -160,81 +295,21 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
               animation: 'fadeIn 0.25s ease',
             }}
           >
-            <div style={{
-              maxWidth: msg.role === 'user' ? '75%' : '82%',
-              padding: msg.role === 'user' ? '10px 16px' : '16px 20px',
-              borderRadius: msg.role === 'user'
-                ? '16px 16px 4px 16px'
-                : '16px 16px 16px 4px',
-              background: msg.role === 'user'
-                ? 'var(--accent)'
-                : 'rgba(255, 255, 255, 0.04)',
-              color: msg.role === 'user'
-                ? 'white'
-                : 'var(--text-primary)',
-              border: msg.role === 'user'
-                ? 'none'
-                : '1px solid var(--glass-border)',
-              fontSize: msg.role === 'user' ? '0.88rem' : '0.88rem',
-              lineHeight: 1.7,
-              boxShadow: msg.role === 'user'
-                ? '0 2px 8px rgba(217, 119, 87, 0.25)'
-                : '0 1px 3px rgba(0,0,0,0.1)',
-            }}>
+            <div className={msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-assistant'}>
               {msg.role === 'user' ? (
                 <span>{msg.content}</span>
               ) : (
-                <div className="notebook-content">
+                <div className="notebook-content assistant-reply">
                   {(() => {
-                    // 分离工具状态日志与正文
-                    const lines = msg.content.split('\n');
-                    const statusLines: string[] = [];
-                    const bodyLines: string[] = [];
-                    let passedStatus = false;
-                    for (const line of lines) {
-                      const trimmed = line.trim();
-                      if (!passedStatus && (
-                        trimmed.startsWith('> 🔍') ||
-                        trimmed.startsWith('> ⚙️') ||
-                        trimmed.startsWith('> 🧪') ||
-                        trimmed.startsWith('> 📊') ||
-                        trimmed.startsWith('> 🔄') ||
-                        trimmed.match(/^>\s*\*.*\*\s*$/) ||
-                        trimmed.match(/^\*.*正在.*\*$/) ||
-                        trimmed.match(/^test\s*>/) ||
-                        trimmed.match(/^>\s*[a-z_]+\s*>/) ||
-                        trimmed === ''
-                      )) {
-                        statusLines.push(line);
-                      } else {
-                        passedStatus = true;
-                        bodyLines.push(line);
-                      }
-                    }
-                    const statusText = statusLines.filter(l => l.trim()).join('\n');
-                    const bodyText = bodyLines.join('\n').trim();
-
+                    const { statusText, bodyText } = separateStatusAndBody(msg.content);
                     return (
                       <>
                         {statusText && (
-                          <div style={{
-                            fontSize: '0.76rem',
-                            color: 'var(--text-muted)',
-                            opacity: 0.7,
-                            lineHeight: 1.5,
-                            paddingBottom: '10px',
-                            marginBottom: '10px',
-                            borderBottom: '1px solid rgba(255,255,255,0.06)',
-                            fontFamily: 'monospace',
-                          }}>
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {statusText}
-                            </ReactMarkdown>
+                          <div className="tool-status-log">
+                            <MarkdownRenderer content={statusText} />
                           </div>
                         )}
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {bodyText || msg.content}
-                        </ReactMarkdown>
+                        <MarkdownRenderer content={bodyText || msg.content} onCitationClick={onCitationClick} />
                       </>
                     );
                   })()}
@@ -285,6 +360,42 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
             }
           }}
         />
+        {/* 深度模式切换 */}
+        <button
+          onClick={() => onDeepModeToggle(!deepMode)}
+          title={deepMode ? "深度模式已启用：知识图谱增强检索 + 详尽分析" : "点击启用深度模式：启用知识图谱增强检索(HyDE)"}
+          style={{
+            position: 'absolute',
+            bottom: '10px',
+            right: '90px',
+            background: deepMode ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)',
+            border: deepMode ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid var(--glass-border)',
+            borderRadius: '6px',
+            padding: '6px 10px',
+            color: deepMode ? 'rgba(59, 130, 246, 0.9)' : 'var(--text-muted)',
+            fontSize: '0.75rem',
+            cursor: 'pointer',
+            fontWeight: deepMode ? 600 : 400,
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            boxShadow: deepMode ? '0 0 8px rgba(59, 130, 246, 0.15)' : 'none',
+          }}
+        >
+          {deepMode ? (
+            <>
+              <span style={{
+                display: 'inline-block', width: '5px', height: '5px',
+                borderRadius: '50%', background: '#3b82f6',
+                animation: 'pulse 1.5s ease-in-out infinite'
+              }} />
+              🧠 深度
+            </>
+          ) : (
+            <>🧠 深度</>
+          )}
+        </button>
         {/* 发送按钮 */}
         <button
           style={{
@@ -324,7 +435,8 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit }) =
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0; }
         }
-      `}</style>
+      `}
+      </style>
 
     </div>
   );

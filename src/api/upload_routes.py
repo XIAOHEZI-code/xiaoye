@@ -14,6 +14,10 @@ import os
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from src.core.logger import setup_logger
+
+logger = setup_logger("xiaoye.upload")
+
 from src.core.config import settings
 from src.db.session import get_db
 from src.models.document import DocumentMetadata
@@ -58,15 +62,18 @@ async def upload_pdf(
     3. 若不存在：保存文件 → 写入 DB(pending) → 后台触发索引管线
     """
     if not file.filename or not file.filename.endswith(".pdf"):
+        logger.warning(f"Rejected invalid file upload: {file.filename}")
         raise HTTPException(status_code=400, detail="仅支持 PDF 文件")
 
     content = await file.read()
+    logger.info(f"Received upload request for file: {file.filename} (Size: {len(content)} bytes)")
     from src.ingestion.dedup import DedupChecker
     file_hash = DedupChecker.compute_hash(content)
 
     # 防重检查
     existing = DedupChecker.check_existing(file_hash)
     if existing:
+        logger.info(f"Fast resume hit for {file.filename} -> doc_id: {existing['id']}")
         return {
             "status": "fast_resume",
             "message": "File already exists",
@@ -92,6 +99,7 @@ async def upload_pdf(
     db.commit()
 
     # 触发后台索引管线
+    logger.info(f"Triggering ingestion pipeline for {doc_id} ({file.filename})")
     background_tasks.add_task(run_ingestion_pipeline_task, doc_id, real_path, file.filename)
 
     return {
@@ -151,3 +159,85 @@ async def serve_local_image(path: str):
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="图片不存在")
     return FileResponse(path)
+
+
+@router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, db: Session = Depends(get_db_session)):
+    """
+    级联删除知识库文档 — 清理四层数据：
+      1. PostgreSQL document_metadata 记录
+      2. Elasticsearch 中该 doc_id 的所有向量 chunk
+      3. Neo4j 中该 doc_id 注入的所有关系
+      4. 磁盘文件（PDF 存储 + Marker 解析产物）
+    """
+    # 0. 查找文档记录
+    doc = db.query(DocumentMetadata).filter(DocumentMetadata.id == doc_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="文档不存在")
+
+    filename = doc.filename
+    real_path = doc.real_path
+    cleanup_report = {"doc_id": doc_id, "filename": filename, "cleaned": []}
+
+    # 1. 删除 Elasticsearch chunks
+    try:
+        from elasticsearch import Elasticsearch
+        es = Elasticsearch(settings.ELASTICSEARCH_URL)
+        result = es.delete_by_query(
+            index="metallurgy_chunks",
+            body={"query": {"term": {"doc_id": doc_id}}},
+            ignore=[404],
+        )
+        deleted_count = result.get("deleted", 0)
+        cleanup_report["cleaned"].append(f"ES: {deleted_count} chunks")
+        logger.info(f"[Delete] ES: deleted {deleted_count} chunks for {doc_id}")
+    except Exception as e:
+        logger.warning(f"[Delete] ES cleanup failed (non-fatal): {e}")
+        cleanup_report["cleaned"].append(f"ES: failed ({e})")
+
+    # 2. 删除 Neo4j 关系和孤立节点
+    try:
+        from neo4j import GraphDatabase
+        driver = GraphDatabase.driver(
+            settings.NEO4J_URI,
+            auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+        )
+        with driver.session() as session:
+            # 删除该文档注入的所有关系
+            result = session.run(
+                "MATCH ()-[r {doc_id: $doc_id}]->() DELETE r RETURN count(r) AS cnt",
+                doc_id=doc_id,
+            )
+            rel_count = result.single()["cnt"]
+            # 清理孤立节点（没有任何关系的节点）
+            session.run("MATCH (n) WHERE NOT (n)--() DELETE n")
+        driver.close()
+        cleanup_report["cleaned"].append(f"Neo4j: {rel_count} relations")
+        logger.info(f"[Delete] Neo4j: deleted {rel_count} relations for {doc_id}")
+    except Exception as e:
+        logger.warning(f"[Delete] Neo4j cleanup failed (non-fatal): {e}")
+        cleanup_report["cleaned"].append(f"Neo4j: failed ({e})")
+
+    # 3. 删除磁盘文件
+    try:
+        # PDF 存储文件
+        if real_path and os.path.exists(real_path):
+            os.remove(real_path)
+            cleanup_report["cleaned"].append(f"PDF: {real_path}")
+        # Marker 解析产物目录
+        import shutil
+        marker_dir = os.path.join(MARKER_OUT_DIR, os.path.splitext(filename)[0])
+        if os.path.isdir(marker_dir):
+            shutil.rmtree(marker_dir)
+            cleanup_report["cleaned"].append(f"Marker: {marker_dir}")
+    except Exception as e:
+        logger.warning(f"[Delete] Disk cleanup failed (non-fatal): {e}")
+        cleanup_report["cleaned"].append(f"Disk: failed ({e})")
+
+    # 4. 删除 PostgreSQL 记录（最后执行，确保前面的清理已完成）
+    db.delete(doc)
+    db.commit()
+    cleanup_report["cleaned"].append("PostgreSQL: record deleted")
+    logger.info(f"[Delete] ✅ Document {doc_id} ({filename}) fully cleaned")
+
+    return {"status": "deleted", **cleanup_report}

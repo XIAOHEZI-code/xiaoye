@@ -49,7 +49,10 @@ body {
   padding: 0;
   background-color: var(--bg-dark);
   color: var(--text-main);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans SC", "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "MiSans", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   height: 100vh;
   overflow: hidden;
   background-image: radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.08), transparent 25%),
@@ -153,6 +156,7 @@ body {
 
 .pdf-page-wrapper {
   position: relative;
+  display: inline-block;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   margin-bottom: 20px;
   background-color: white; /* PDF content needs white bg usually */
@@ -244,24 +248,44 @@ body {
   color: #f87171;
 }
 
-/* Notebook Markdown Specific */
+/* ====================================================================
+   Notebook Markdown Specific
+   ==================================================================== */
 .notebook-content {
   color: var(--text-secondary);
   font-size: 0.9rem;
   line-height: 1.7;
+  font-family: "Noto Sans SC", "Microsoft YaHei", "MiSans", sans-serif !important;
+}
+
+.notebook-content p, .notebook-content span, .notebook-content div {
+  font-weight: 400;
+}
+
+.notebook-content p {
+  margin: 0.6em 0;
 }
 
 .notebook-content h1, .notebook-content h2, .notebook-content h3 {
-  color: white;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
+  color: var(--text-primary);
+  font-family: "Noto Sans SC", "Microsoft YaHei", "MiSans", sans-serif !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 0.3em;
 }
+
+.notebook-content h1 { margin-top: 1.2em; margin-bottom: 0.6em; font-size: 1.3em; }
+.notebook-content h2 { margin-top: 1.1em; margin-bottom: 0.5em; font-size: 1.15em; }
+.notebook-content h3 { margin-top: 0.9em; margin-bottom: 0.4em; font-size: 1.05em; border-bottom: none; }
+.notebook-content h4 { margin-top: 0.8em; margin-bottom: 0.3em; font-size: 1em; color: var(--text-primary); }
 
 .notebook-content code {
   background: rgba(0,0,0,0.3);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: monospace;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.85em;
   color: #93c5fd;
 }
 
@@ -271,11 +295,308 @@ body {
   border-radius: 8px;
   padding: 16px;
   overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+.notebook-content pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
 }
 
 .notebook-content blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 12px;
   margin-left: 0;
+  margin-right: 0;
   color: var(--text-muted);
+  background: rgba(217, 119, 87, 0.04);
+  border-radius: 0 4px 4px 0;
+  padding: 8px 12px;
+}
+
+.notebook-content ul, .notebook-content ol {
+  padding-left: 1.6em;
+  margin: 0.5em 0;
+}
+
+.notebook-content li {
+  margin: 0.25em 0;
+}
+
+.notebook-content li::marker {
+  color: var(--accent);
+}
+
+.notebook-content strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.notebook-content em {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.notebook-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.8em 0;
+  font-size: 0.85rem;
+}
+
+.notebook-content th, .notebook-content td {
+  border: 1px solid var(--glass-border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.notebook-content th {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.notebook-content td {
+  color: var(--text-secondary);
+}
+
+.notebook-content tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notebook-content hr {
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: 1em 0;
+}
+
+.notebook-content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(217, 119, 87, 0.3);
+  transition: border-color 0.2s;
+}
+
+.notebook-content a:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* ====================================================================
+   Chat Bubble Styles
+   ==================================================================== */
+.chat-bubble-user {
+  max-width: 75%;
+  padding: 10px 16px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--accent);
+  color: white;
+  font-size: 0.88rem;
+  line-height: 1.7;
+  box-shadow: 0 2px 8px rgba(217, 119, 87, 0.25);
+}
+
+.chat-bubble-assistant {
+  max-width: 88%;
+  padding: 16px 20px;
+  border-radius: 16px 16px 16px 4px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  font-size: 0.88rem;
+  line-height: 1.7;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* ====================================================================
+   Tool Status Log (分离工具调用状态)
+   ==================================================================== */
+.tool-status-log {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  line-height: 1.5;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+.tool-status-log p {
+  margin: 2px 0;
+}
+
+/* ====================================================================
+   Thinking Panel (可折叠推理过程面板)
+   ==================================================================== */
+.thinking-panel-wrapper {
+  flex-shrink: 0;
+}
+
+.thinking-toggle-btn {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.25s ease;
+  font-family: inherit;
+}
+
+.thinking-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.thinking-toggle-btn.has-content {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.thinking-toggle-btn.has-content:hover {
+  background: rgba(217, 119, 87, 0.2);
+}
+
+.thinking-toggle-icon {
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.thinking-pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* Collapsible thinking content panel with smooth animation */
+.thinking-content-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease,
+              margin-top 0.25s ease;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.thinking-content-panel.open {
+  max-height: 250px;
+  opacity: 1;
+  margin-top: 8px;
+}
+
+.thinking-content-inner {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  max-height: 230px;
+  overflow-y: auto;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.thinking-header-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.thinking-text {
+  font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+
+.thinking-text p {
+  margin: 0.3em 0;
+}
+
+/* ====================================================================
+   KaTeX Math Overrides (适配暗色主题)
+   ==================================================================== */
+.katex {
+  font-size: 1em !important;
+  color: var(--text-primary) !important;
+}
+
+.katex-display {
+  margin: 0.8em 0 !important;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  border-left: 3px solid rgba(217, 119, 87, 0.4);
+  overflow-x: auto;
+}
+
+.katex-display > .katex {
+  text-align: left !important;
+}
+
+.katex .mord, .katex .mbin, .katex .mrel,
+.katex .mopen, .katex .mclose, .katex .mpunct,
+.katex .minner, .katex .mop {
+  color: var(--text-primary) !important;
+}
+
+/* Ensure KaTeX error messages are visible */
+.katex-error {
+  color: var(--status-error) !important;
+  font-size: 0.8rem;
+}
+
+/* ====================================================================
+   Light theme overrides for thinking panel and math
+   ==================================================================== */
+[data-theme="light"] .thinking-content-inner {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="light"] .thinking-toggle-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .chat-bubble-assistant {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .tool-status-log {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .katex-display {
+  background: rgba(0, 0, 0, 0.03);
+  border-left-color: rgba(196, 97, 46, 0.4);
+}
+
+[data-theme="light"] .notebook-content h1,
+[data-theme="light"] .notebook-content h2,
+[data-theme="light"] .notebook-content h3 {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .notebook-content th {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .notebook-content blockquote {
+  background: rgba(196, 97, 46, 0.04);
 }

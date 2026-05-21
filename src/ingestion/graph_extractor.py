@@ -10,10 +10,11 @@ from src.core.config import settings
 class Triplet(BaseModel):
     subject: str = Field(description="源实体名称")
     subject_type: str = Field(description="MUST be one of: [Material, Property, Process, Structure, Equipment]")
-    relation: str = Field(description="MUST be one of: [has_property, has_structure, processed_by, uses_equipment, affects]")
+    relation: str = Field(description="MUST be one of: [has_property, has_structure, processed_by, uses_equipment, improves, degrades]")
     object_: str = Field(description="目标实体名称", alias="object")
     object_type: str = Field(description="MUST be one of: [Material, Property, Process, Structure, Equipment]")
-
+    mechanism: str = Field(default="", description="关系产生的微观机理或原理（如：晶间敏化、碳化物析出），如果没有则为空")
+    context: str = Field(default="", description="关系生效的具体上下文或材料对象（如：304不锈钢覆层），如果没有则为空")
 class ExtractedGraph(BaseModel):
     triplets: List[Triplet] = Field(description="List of extracted knowledge triplets")
 
@@ -54,10 +55,11 @@ class Neo4jGraphExtractor:
         2. has_structure (含有组织: Material -> Structure)
         3. processed_by (经过工艺: Material -> Process)
         4. uses_equipment (使用设备: Process -> Equipment)
-        5. affects (影响: Process/Structure -> Property)
+        5. improves (正向提升: Process/Structure -> Property)
+        6. degrades (负向恶化: Process/Structure -> Property)
         
         请输出 JSON 格式，包含一个 'triplets' 列表，每个元素严格包含:
-        'subject', 'subject_type', 'relation', 'object', 'object_type'。
+        'subject', 'subject_type', 'relation', 'object', 'object_type', 'mechanism' (产生此关系的机理/原因), 'context' (发生此关系的具体条件/对象材料)。
         
         输入文本：
         "{text_chunk}"
@@ -69,22 +71,61 @@ class Neo4jGraphExtractor:
             
             # Since we enforce json_object response format
             data = json.loads(response.content)
-            triplets = data.get("triplets", [])
-            return [Triplet(**t) for t in triplets]
+            if isinstance(data, list):
+                triplets_data = data
+            else:
+                triplets_data = data.get("triplets", [])
+                
+            extracted = [Triplet(**t) for t in triplets_data]
+            return self.review_and_normalize_triplets(extracted)
         except Exception as e:
             print(f"Error extracting triplets: {e}")
             return []
 
+    def review_and_normalize_triplets(self, triplets: List[Triplet]) -> List[Triplet]:
+        """
+        Secondary pass to review and normalize entities (translation, stripping modifiers).
+        """
+        if not triplets:
+            return []
+        
+        # Serialize triplets to JSON string for the prompt
+        triplets_json = [t.model_dump(by_alias=True) for t in triplets]
+        
+        prompt = f"""
+        你是一位知识图谱数据清洗专家。请对以下初步抽取出的冶金三元组进行「归一化（Normalization）」审查。
+        
+        【归一化规则】：
+        1. 翻译与统一定名：将所有的英文专业名词统一翻译为标准中文（例如 "cold-worked 304/45 composite bolts" -> "304/45双金属复合螺栓"）。
+        2. 剥离状态修饰词：实体名称（subject/object）中不应包含具体的状态或条件定语（如“冷加工态”、“850℃保温”、“淬火后”）。请将这些状态修饰词剥离，并补充到关系(relation)的 `context`（上下文）字段中，保证实体名称的纯洁性。
+        3. 合并同义词：确保类似 "304/45 钢双金属复合螺栓" 和 "304/45钢复合螺栓" 被统一为最标准、最简洁的名字。
+        4. 保持格式：绝对不要改变原有的 subject_type, object_type, relation 的可选值。
+        
+        输入的三元组列表（JSON格式）：
+        {json.dumps(triplets_json, ensure_ascii=False)}
+        
+        请输出 JSON 格式，包含一个 'triplets' 列表，里面是清洗并归一化后的三元组，格式与输入严格保持一致。
+        """
+        
+        try:
+            msg = HumanMessage(content=prompt)
+            response = self.llm.invoke([msg])
+            data = json.loads(response.content)
+            
+            if isinstance(data, list):
+                norm_triplets = data
+            else:
+                norm_triplets = data.get("triplets", [])
+                
+            return [Triplet(**t) for t in norm_triplets]
+        except Exception as e:
+            print(f"Error normalizing triplets: {e}")
+            return triplets  # Fallback to original if error occurs
+
     def load_triplets_to_neo4j(self, triplets: List[Triplet], doc_id: str):
         """
-        Injects the extracted triplets into the Neo4j Graph DB.
+        Injects the extracted triplets into the Neo4j Graph DB with dynamic labels and edges.
         """
-        query = (
-            "MERGE (s:Entity {id: $subject_id, name: $subject_name}) "
-            "MERGE (o:Entity {id: $object_id, name: $object_name}) "
-            "MERGE (s)-[r:RELATION {type: $relation_type, doc_id: $doc_id}]->(o)"
-        )
-
         with self.driver.session() as session:
             for t in triplets:
                 # Basic ID generation from names, production would do better entity resolution
@@ -92,13 +133,31 @@ class Neo4jGraphExtractor:
                 obj_id = self._normalize_entity(t.object_)
                 if not sub_id or not obj_id:
                     continue
+                
+                # Sanitize for Cypher interpolation. Pydantic ensures these are safe.
+                s_label = t.subject_type.replace(" ", "")
+                o_label = t.object_type.replace(" ", "")
+                r_type = t.relation.replace(" ", "").upper()
+                
+                query = f"""
+                MERGE (s:{s_label} {{id: $sub_id}})
+                ON CREATE SET s.name = $sub_name
+                
+                MERGE (o:{o_label} {{id: $obj_id}})
+                ON CREATE SET o.name = $obj_name
+                
+                MERGE (s)-[r:{r_type} {{doc_id: $doc_id}}]->(o)
+                ON CREATE SET r.mechanism = $mechanism, r.context = $context, r.weight = 1
+                ON MATCH SET r.mechanism = $mechanism, r.context = $context, r.weight = coalesce(r.weight, 1) + 1
+                """
                     
                 session.run(
                     query, 
-                    subject_id=sub_id, subject_name=t.subject,
-                    object_id=obj_id, object_name=t.object_,
-                    relation_type=t.relation,
-                    doc_id=doc_id
+                    sub_id=sub_id, sub_name=t.subject,
+                    obj_id=obj_id, obj_name=t.object_,
+                    doc_id=doc_id,
+                    mechanism=t.mechanism,
+                    context=t.context
                 )
 
     def _normalize_entity(self, text: str) -> str:

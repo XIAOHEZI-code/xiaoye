@@ -27,16 +27,13 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
         os.makedirs(out_dir)
 
     print(f"Running Marker-PDF CLI for: {filepath}")
-    
+
     # Marker 1.0+ CLI syntax
     import sys
+
     marker_bin = os.path.join(sys.prefix, "bin", "marker_single")
-    cmd = [
-        marker_bin,
-        filepath,
-        "--output_dir", out_dir
-    ]
-    
+    cmd = [marker_bin, filepath, "--output_dir", out_dir]
+
     # Marker / Surya VRAM Optimization for ~8GB GPU
     env = os.environ.copy()
     env["DETECTOR_BATCH_SIZE"] = "2"
@@ -44,19 +41,19 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
     env["LAYOUT_BATCH_SIZE"] = "2"
     env["TABLE_REC_BATCH_SIZE"] = "2"
     env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-    
+
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
         print("Marker extraction failed:")
         print(result.stderr)
         raise RuntimeError(f"Marker failed with return code {result.returncode}")
-        
+
     print("Marker-PDF extraction completed successfully.")
 
     # Locate generated markdown file and metadata in out_dir/<basename>
     basename = os.path.splitext(os.path.basename(filepath))[0]
     result_dir = os.path.join(out_dir, basename)
-    
+
     if os.path.exists(result_dir):
         # Marker creates a subdirectory with the basename
         md_file = os.path.join(result_dir, f"{basename}.md")
@@ -67,7 +64,7 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
         md_file = os.path.join(out_dir, f"{basename}.md")
         meta_file = os.path.join(out_dir, f"{basename}_meta.json")
         image_dir = out_dir
-        
+
     # Read text
     md_text = ""
     if os.path.exists(md_file):
@@ -76,16 +73,48 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
 
     # Read meta
     import json
+
     out_metadata = {}
     if os.path.exists(meta_file):
         with open(meta_file, "r", encoding="utf-8") as f:
             out_metadata = json.load(f)
 
     # Gather images
-    images = glob.glob(os.path.join(image_dir, "*.png")) + glob.glob(os.path.join(image_dir, "*.webp"))
+    images = glob.glob(os.path.join(image_dir, "*.png")) + glob.glob(
+        os.path.join(image_dir, "*.webp")
+    )
     images = [os.path.abspath(img) for img in images]
 
     return md_text, images, out_metadata
+
+
+def _get_page_from_toc(chunk_text: str, toc_entries: list) -> int:
+    """Find which page a chunk belongs to by matching against TOC section titles.
+
+    Strategy: Find the last TOC entry whose title appears in the chunk text or
+    appears earlier in the markdown, and return its page_id (converted to 1-indexed).
+    """
+    if not toc_entries:
+        return -1
+
+    import re
+
+    clean_chunk = re.sub(r"[#*`\[\]()>_~\\|]", "", chunk_text[:500]).strip()
+
+    best_page = -1
+    best_pos = -1
+
+    for entry in toc_entries:
+        title = entry.get("title", "")
+        page_id = entry.get("page_id", -1)
+        if not title or page_id < 0:
+            continue
+        pos = clean_chunk.find(title)
+        if pos >= 0 and (best_pos < 0 or pos < best_pos):
+            best_pos = pos
+            best_page = page_id + 1  # Convert 0-indexed to 1-indexed
+
+    return best_page
 
 
 def split_markdown_into_chunk_documents(
@@ -94,55 +123,50 @@ def split_markdown_into_chunk_documents(
     doc_id: str,
     source_pdf_id: str,
     chunk_size: int = 1000,
-    chunk_overlap: int = 200
+    chunk_overlap: int = 200,
 ) -> List[ChunkDocument]:
     from src.models.chunk_document import make_text_chunk
-    
+
     chunks = []
-    
+
     import jieba
+
+    # Build TOC entries for page number extraction
+    toc_entries = out_metadata.get("table_of_contents", []) if out_metadata else []
+
     # Simple semantic splitting based on double newlines
-    paragraphs = md_text.split('\n\n')
-    
+    paragraphs = md_text.split("\n\n")
+
     current_chunk = ""
     for p in paragraphs:
         if len(current_chunk) + len(p) > chunk_size and current_chunk:
-            page_number = -1
+            page_number = _get_page_from_toc(current_chunk, toc_entries)
             bbox = None
-            
-            if out_metadata and "blocks" in out_metadata:
-                # Naive matching of the first 20 chars of chunk to blocks
-                sample = current_chunk[:20].strip()
-                for b in out_metadata["blocks"]:
-                    if sample in b.get("text", ""):
-                        if "pnums" in b and len(b["pnums"]) > 0:
-                            page_number = b["pnums"][0]
-                        if "bbox" in b:
-                            bbox = b["bbox"]
-                        break
-            
+
             doc = make_text_chunk(
                 text=current_chunk,
                 doc_id=doc_id,
                 source_pdf_id=source_pdf_id,
                 page_number=page_number,
-                bbox=bbox
+                bbox=bbox,
             )
             chunks.append(doc)
             # Take overlap: simple string slicing for prototyping
-            current_chunk = current_chunk[-chunk_overlap:] + "\n\n" + p if chunk_overlap > 0 else p
+            current_chunk = (
+                current_chunk[-chunk_overlap:] + "\n\n" + p if chunk_overlap > 0 else p
+            )
         else:
             current_chunk += ("\n\n" + p) if current_chunk else p
-            
+
     if current_chunk.strip():
-        page_number = -1
+        page_number = _get_page_from_toc(current_chunk, toc_entries)
         bbox = None
         doc = make_text_chunk(
             text=current_chunk,
             doc_id=doc_id,
             source_pdf_id=source_pdf_id,
             page_number=page_number,
-            bbox=bbox
+            bbox=bbox,
         )
         chunks.append(doc)
 
@@ -152,6 +176,7 @@ def split_markdown_into_chunk_documents(
 # =============================================================
 #  V2 新增：图注提取与上下文感知图像分析
 # =============================================================
+
 
 def process_figures(
     md_text: str,
@@ -188,14 +213,18 @@ def process_figures(
 
     if not figures:
         # 降级：如果 Markdown 中没有图片引用，直接用文件列表创建基础 chunk
-        print(f"[process_figures] 未在 Markdown 中找到图片引用，"
-              f"使用文件列表 ({len(image_paths)} 张)")
+        print(
+            f"[process_figures] 未在 Markdown 中找到图片引用，"
+            f"使用文件列表 ({len(image_paths)} 张)"
+        )
         return _create_basic_image_chunks(image_paths, doc_id, source_pdf_id)
 
     # 2. 过滤出有意义的图表（有图注或关键词的）
     meaningful = [f for f in figures if is_figure_item(f)]
-    print(f"[process_figures] 提取到 {len(figures)} 张图片引用，"
-          f"其中 {len(meaningful)} 张为有意义图表")
+    print(
+        f"[process_figures] 提取到 {len(figures)} 张图片引用，"
+        f"其中 {len(meaningful)} 张为有意义图表"
+    )
 
     # 3. 为每个有意义的图片创建增强 chunk
     result_chunks = []
@@ -214,7 +243,9 @@ def process_figures(
                 desc_parts.append(f"【上文】{fig.context_above[-100:]}")
             if fig.context_below:
                 desc_parts.append(f"【下文】{fig.context_below[:100]}")
-            description = "\n\n".join(desc_parts) if desc_parts else f"图片: {fig.image_filename}"
+            description = (
+                "\n\n".join(desc_parts) if desc_parts else f"图片: {fig.image_filename}"
+            )
 
             chunk = make_image_chunk(
                 description=description,
@@ -229,7 +260,9 @@ def process_figures(
     referenced_paths = {f.image_path for f in figures}
     unreferenced = [p for p in image_paths if p not in referenced_paths]
     if unreferenced:
-        print(f"[process_figures] 另有 {len(unreferenced)} 张图片未在 Markdown 中找到引用")
+        print(
+            f"[process_figures] 另有 {len(unreferenced)} 张图片未在 Markdown 中找到引用"
+        )
         result_chunks.extend(
             _create_basic_image_chunks(unreferenced, doc_id, source_pdf_id)
         )
@@ -324,7 +357,9 @@ def _analyze_figures_with_vlm(
                 chunk_type="figure",
             )
             chunks.append(chunk)
-            print(f"  ✓ 已分析: {fig.image_filename} → {result.category}/{result.sub_category}")
+            print(
+                f"  ✓ 已分析: {fig.image_filename} → {result.category}/{result.sub_category}"
+            )
 
         except Exception as e:
             print(f"  ✗ 分析失败: {fig.image_filename}: {e}")

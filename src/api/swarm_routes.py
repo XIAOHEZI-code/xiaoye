@@ -5,6 +5,9 @@ from sse_starlette.sse import EventSourceResponse
 import redis.asyncio as redis
 
 from src.core.config import settings
+from src.core.logger import setup_logger
+
+logger = setup_logger("xiaoye.swarm")
 
 router = APIRouter()
 
@@ -43,6 +46,7 @@ async def fork_agent(request: ForkRequest, background_tasks: BackgroundTasks):
     M3 Event Gateway: Accepts long-running task, immediately returns OK.
     The Background task will spin up the `forkSubagent` logic.
     """
+    logger.info(f"Fork Agent Dispatched -> Task: {request.taskId}, Type: {request.type}, BBox: {request.bbox.model_dump()}")
     background_tasks.add_task(background_fork_worker, request)
     return {"status": "ok", "message": "Fork deployed to background."}
 

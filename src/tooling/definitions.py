@@ -5,6 +5,7 @@
 from pydantic import BaseModel, Field
 from src.retrieval.semantic_search import SemanticSearchTool
 from src.retrieval.graph_search import GraphLogicTool
+from src.retrieval.hyde_searcher import HyDESearcher
 from src.tools.sandbox import get_sandbox
 from src.tools.pdf_cropper import crop_pdf_to_base64_png
 from src.ingestion.image_analyzer import analyze_metallurgy_image_with_context, ImageEvaluationResult
@@ -15,6 +16,7 @@ from langchain_core.tools import StructuredTool
 
 semantic_searcher = SemanticSearchTool()
 graph_searcher = GraphLogicTool()
+hyde_searcher = HyDESearcher()
 
 
 # =============================================================
@@ -186,6 +188,55 @@ def search_metallurgy_text(query: str, top_k: int = 3) -> str:
 
     return "\n\n---\n\n".join(formatted)
 
+def search_metallurgy_kg_enhanced(query: str, top_k: int = 3) -> str:
+    """
+    Search for metallurgy documents using KG-Anchored HyDE.
+    This generates a hypothetical document anchored in the knowledge graph to perform a much more accurate semantic search.
+    """
+    results = hyde_searcher.search(query, top_k=top_k)
+    if not results:
+        return "No relevant text documents found."
+    
+    formatted = []
+    for r in results:
+        citation = r.to_citation_str()
+        content = f"Doc: {r.doc_id} {citation} (Type: {r.source_type})\nContent: {r.text_content}"
+        if r.image_uri:
+            import urllib.parse
+            encoded_path = urllib.parse.quote(r.image_uri)
+            image_md = f"![{r.source_type}图表](http://127.0.0.1:8000/api/v1/images?path={encoded_path})"
+            content += f"\nImage: {image_md}"
+        formatted.append(content)
+
+    # Push to SSE (similar to search_metallurgy_text)
+    try:
+        import redis as sync_redis
+        from src.core.config import settings as _settings
+
+        source_map = {}
+        for r in results:
+            if r.doc_id not in source_map:
+                source_map[r.doc_id] = {
+                    "doc_id": r.doc_id,
+                    "filename": r.source_pdf_id or r.doc_id,
+                    "pages": [],
+                    "score": r.score or 0,
+                    "chunk_type": r.chunk_type,
+                }
+            if r.page_number > 0 and r.page_number not in source_map[r.doc_id]["pages"]:
+                source_map[r.doc_id]["pages"].append(r.page_number)
+
+        rc = sync_redis.from_url(_settings.CELERY_BROKER_URL)
+        rc.publish("xiaoye_sse", json.dumps({
+            "type": "retrieval_sources",
+            "sources": list(source_map.values()),
+        }, ensure_ascii=False))
+        rc.close()
+    except Exception as e:
+        print(f"[Tool:search_metallurgy_kg_enhanced] Failed to push retrieval sources (non-fatal): {e}")
+
+    return "\n\n---\n\n".join(formatted)
+
 
 def search_metallurgy_graph_relations(entity: str) -> str:
     """
@@ -280,6 +331,15 @@ def _register_all_tools():
         always_load=True
     ))
 
+    # KG-增强 HyDE 检索 — 延迟加载
+    engine.register(search_metallurgy_kg_enhanced, ToolMetadata(
+        name="search_metallurgy_kg_enhanced",
+        description="基于图谱锚定生成的增强检索 (KG-HyDE)。在查询复杂机理或长尾概念时，会先通过图谱游走获取背景知识，生成高质量伪文档后再进行向量召回，准确率极高。",
+        category="text",
+        search_hint="图谱增强 hyde 检索 复杂查询 机理 kg-hyde",
+        should_defer=True
+    ))
+
     # 图谱单跳查询 — 延迟加载
     engine.register(search_metallurgy_graph_relations, ToolMetadata(
         name="search_metallurgy_graph_relations",
@@ -349,7 +409,13 @@ TEXT_TOOLS = [
     StructuredTool.from_function(
         func=search_metallurgy_text,
         name="search_metallurgy_text",
-        description="Search for chunked texts, standards, and image descriptions in the metallurgy database.",
+        description="Hybrid Semantic Search (Embedding + BM25) for metallurgy documents. Input natural language queries, full sentences, or abstract concepts, not just keywords.",
+        args_schema=SearchTextInput
+    ),
+    StructuredTool.from_function(
+        func=search_metallurgy_kg_enhanced,
+        name="search_metallurgy_kg_enhanced",
+        description="Graph-Enhanced Semantic Search (KG-HyDE). Use this for complex, mechanism-related or long-tail queries. It uses KG traversal to anchor generation before semantic search.",
         args_schema=SearchTextInput
     )
 ]

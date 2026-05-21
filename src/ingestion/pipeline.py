@@ -54,24 +54,32 @@ class IngestionPipeline:
         db = SessionLocal()
         try:
             # ── Step 1: Marker PDF → Markdown ──────────────────────────
+            self._update_db_status(db, "parsing")
             md_text, image_paths, out_metadata = self._step_parse_pdf()
             if md_text is None:
                 self._update_db_status(db, "failed")
                 return
 
             # ── Step 2: 文本分块 ──────────────────────────────────────
+            self._update_db_status(db, "chunking")
             text_chunks = self._step_chunk_text(md_text, out_metadata)
 
             # ── Step 3: 图片处理 ──────────────────────────────────────
+            self._update_db_status(db, "figures")
             figure_chunks = self._step_process_figures(md_text, image_paths)
 
             # ── Step 4: ES 向量化写入 ─────────────────────────────────
+            self._update_db_status(db, "indexing")
             success = self._step_index_to_es(text_chunks, figure_chunks)
             if not success:
                 self._update_db_status(db, "failed")
                 return
 
-            # ── Step 5: 更新状态 ──────────────────────────────────────
+            # ── Step 5: 知识图谱抽取与写入 ────────────────────────────
+            self._update_db_status(db, "graphing")
+            self._step_extract_knowledge_graph(text_chunks)
+
+            # ── Step 6: 更新状态 ──────────────────────────────────────
             self._update_db_status(db, "ready")
             self.tracker.emit(IngestionStage.COMPLETED, "入库管线已完成")
             print(f"[Ingestion] ✅ Pipeline complete for doc_id={self.doc_id}")
@@ -174,6 +182,34 @@ class IngestionPipeline:
             print(f"[Ingestion] ES indexing failed: {e}")
             self.tracker.emit(IngestionStage.FAILED, f"ES 索引失败: {e}")
             return False
+
+    def _step_extract_knowledge_graph(self, text_chunks: list):
+        """Step 5: 知识图谱抽取与写入"""
+        self.tracker.emit(IngestionStage.INDEXING, "正在抽取并构建领域图谱...")
+
+        try:
+            from src.ingestion.graph_extractor import Neo4jGraphExtractor
+            extractor = Neo4jGraphExtractor()
+            total_triplets = 0
+            
+            # To avoid excessive token usage and time during synchronous ingestion, 
+            # we limit extraction to the most meaningful chunks (e.g., first 10 for now).
+            # In production, this should be an async background celery task.
+            print(f"[Ingestion] Extracting graph from all {len(text_chunks)} chunks...")
+            for chunk in text_chunks:
+                content = getattr(chunk, "text_content", "")
+                if len(content.strip()) > 50:
+                    triplets = extractor.extract_triplets_from_text(content)
+                    if triplets:
+                        extractor.load_triplets_to_neo4j(triplets, self.doc_id)
+                        total_triplets += len(triplets)
+            
+            extractor.close()
+            self.tracker.emit(IngestionStage.INDEXING, f"图谱抽取完成: 共注入 {total_triplets} 个三元组关系")
+            print(f"[Ingestion] Extracted and injected {total_triplets} triplets into Neo4j")
+        except Exception as e:
+            print(f"[Ingestion] Graph extraction failed (non-fatal): {e}")
+            self.tracker.emit(IngestionStage.INDEXING, f"图谱抽取失败(非致命): {e}")
 
     # ── 辅助方法 ──────────────────────────────────────────────────
 

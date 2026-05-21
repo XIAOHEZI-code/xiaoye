@@ -129,7 +129,7 @@ const AskUserModal: React.FC<Props> = ({ event, onReply, onDismiss }) => {
               background: 'var(--accent)',
               animation: 'pulse 1.5s ease-in-out infinite',
             }} />
-            🤖 小冶需要您的确认
+            小冶需要您的确认
           </div>
           <span style={{
             fontSize: '0.72rem',

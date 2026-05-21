@@ -25,15 +25,15 @@ class GraphLogicTool:
         entity_id = self._normalize_entity(entity_name)
         
         if direction == "out":
-            match_clause = "(s:Entity {id: $entity_id})-[r:RELATION]->(o:Entity)"
+            match_clause = "(s {id: $entity_id})-[r]->(o)"
         elif direction == "in":
-            match_clause = "(s:Entity)-[r:RELATION]->(o:Entity {id: $entity_id})"
+            match_clause = "(s)-[r]->(o {id: $entity_id})"
         else:
-            match_clause = "(s:Entity {id: $entity_id})-[r:RELATION]-(o:Entity)"
+            match_clause = "(s {id: $entity_id})-[r]-(o)"
 
         query = f"""
         MATCH {match_clause}
-        RETURN s.name AS subject, type(r) AS relation, o.name AS object, r.doc_id AS source_doc
+        RETURN labels(s)[0] AS s_label, s.name AS subject, type(r) AS relation, r.mechanism AS mechanism, r.context AS context, labels(o)[0] AS o_label, o.name AS object, r.doc_id AS source_doc
         LIMIT 20
         """
 
@@ -42,9 +42,11 @@ class GraphLogicTool:
             records = session.run(query, entity_id=entity_id)
             for record in records:
                 results.append({
-                    "subject": record["subject"],
+                    "subject": f"{record['subject']} ({record['s_label']})",
                     "relation": record["relation"],
-                    "object": record["object"],
+                    "object": f"{record['object']} ({record['o_label']})",
+                    "mechanism": record["mechanism"],
+                    "context": record["context"],
                     "source_doc": record["source_doc"]
                 })
         return results
@@ -58,7 +60,7 @@ class GraphLogicTool:
         
         # Variable length path traversal
         query = f"""
-        MATCH p = (start:Entity {{id: $entity_id}})-[:RELATION*1..{max_hops}]->(end:Entity)
+        MATCH p = (start {{id: $entity_id}})-[*1..{max_hops}]->(end)
         RETURN [x IN nodes(p) | x.name] AS path_nodes, [r IN relationships(p) | type(r)] AS path_relations
         LIMIT 10
         """

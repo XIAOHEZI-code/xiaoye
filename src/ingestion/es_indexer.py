@@ -84,7 +84,7 @@ class ElasticsearchIndexer:
 
     def index_chunk_documents(self, chunks: List["ChunkDocument"]):
         """
-        [M1 新接口] 索引带有完整溯源元数据的 ChunkDocument 列表。
+        [接口] 索引带有完整溯源元数据的 ChunkDocument 列表。
         每个 chunk 携带 page_number, bbox, image_uri, chunk_type 等富媒体字段。
         """
         if not chunks:
