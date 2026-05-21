@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, Zap } from 'lucide-react';
 
 interface Node {
   id: string;
@@ -25,9 +25,12 @@ interface GraphData {
 export function KnowledgeGraphViewer({ onClose }: { onClose: () => void }) {
   const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
+  const [deduping, setDeduping] = useState(false);
+  const [dedupResult, setDedupResult] = useState<string | null>(null);
   const fgRef = useRef<any>(null);
 
-  useEffect(() => {
+  const fetchGraph = () => {
+    setLoading(true);
     fetch('/api/v1/graph?limit=500')
       .then(res => res.json())
       .then((d: GraphData) => {
@@ -38,7 +41,31 @@ export function KnowledgeGraphViewer({ onClose }: { onClose: () => void }) {
         console.error(e);
         setLoading(false);
       });
-  }, []);
+  };
+
+  useEffect(() => { fetchGraph(); }, []);
+
+  const handleDedup = async () => {
+    if (!confirm('执行知识图谱去重？\n将通过 Embedding + LLM 两步验证合并同义实体。')) return;
+    setDeduping(true);
+    setDedupResult(null);
+    try {
+      const res = await fetch('/api/v1/graph/dedup/apply', { method: 'POST' });
+      const result = await res.json();
+      if (result.status === 'merged') {
+        setDedupResult(`✅ 合并了 ${result.merged} 对同义实体（${result.total_before} → ${result.total_after} 节点）`);
+        fetchGraph(); // 刷新图谱
+      } else if (result.status === 'clean') {
+        setDedupResult('✅ 图谱已是最优状态，无需去重');
+      } else {
+        setDedupResult('图谱为空');
+      }
+    } catch {
+      setDedupResult('❌ 去重失败，请检查后端服务');
+    } finally {
+      setDeduping(false);
+    }
+  };
 
   const getNodeColor = (label: string) => {
     switch (label) {
@@ -130,21 +157,64 @@ export function KnowledgeGraphViewer({ onClose }: { onClose: () => void }) {
               animation: 'pulse 2s infinite'
             }} />
             冶金知识图谱全景可视化 (Knowledge Graph)
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+              {data.nodes.length > 0 && `${data.nodes.length} 节点 / ${data.links.length} 关系`}
+            </span>
           </h2>
-          <button 
-            onClick={onClose}
-            style={{
-              background: 'none', border: 'none',
-              color: 'var(--text-muted)',
-              cursor: 'pointer', padding: '8px',
-              borderRadius: '8px',
-              display: 'flex', alignItems: 'center'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
-          >
-            <X size={20} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {dedupResult && (
+              <span style={{
+                fontSize: '0.78rem',
+                color: dedupResult.startsWith('✅') ? 'var(--success)' : 'var(--status-error)',
+                padding: '4px 10px',
+                background: 'rgba(255,255,255,0.05)',
+                borderRadius: '6px',
+              }}>
+                {dedupResult}
+              </span>
+            )}
+            <button
+              onClick={handleDedup}
+              disabled={deduping || loading}
+              title="知识图谱去重（Embedding + LLM 两步验证）"
+              style={{
+                background: deduping ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.15)',
+                border: '1px solid rgba(139,92,246,0.4)',
+                color: '#a78bfa',
+                cursor: deduping ? 'default' : 'pointer',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.82rem',
+                transition: 'all 0.15s',
+              }}
+              onMouseOver={(e) => { if (!deduping) e.currentTarget.style.background = 'rgba(139,92,246,0.3)'; }}
+              onMouseOut={(e) => { if (!deduping) e.currentTarget.style.background = 'rgba(139,92,246,0.15)'; }}
+            >
+              {deduping ? (
+                <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Zap size={14} />
+              )}
+              {deduping ? '去重中...' : '智能去重'}
+            </button>
+            <button 
+              onClick={onClose}
+              style={{
+                background: 'none', border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer', padding: '8px',
+                borderRadius: '8px',
+                display: 'flex', alignItems: 'center'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+              onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div style={{ flex: 1, position: 'relative', backgroundColor: 'var(--base-bg)' }}>

@@ -55,6 +55,10 @@ app.include_router(askuser_router, prefix="/api/v1", tags=["AskUser"])
 # 知识图谱路由
 app.include_router(graph_router, prefix="/api/v1", tags=["Graph"])
 
+# 知识图谱去重路由
+from src.api.graph_dedup_routes import router as graph_dedup_router
+app.include_router(graph_dedup_router, prefix="/api/v1", tags=["Graph Dedup"])
+
 # 仅保留测试用例路由
 app.include_router(debug_router, prefix="/api/v1/debug", tags=["Debug & Testing"])
 
