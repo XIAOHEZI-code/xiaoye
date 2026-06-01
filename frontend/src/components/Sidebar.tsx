@@ -107,14 +107,30 @@ const Sidebar: React.FC<Props> = ({
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
 
     try {
-      const res = await fetch('/api/v1/upload_pdf', {
-        method: 'POST',
-        body: formData,
-      });
+      // 检查是否在 Electron 环境中，且能获取到绝对路径
+      const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron');
+      const filepath = (file as any).path;
+      
+      let res;
+      if (isElectron && filepath) {
+        // Electron 极速上传模式：直接发送绝对路径给后端
+        res = await fetch('/api/v1/upload_local_pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filepath }),
+        });
+      } else {
+        // 传统 Web 上传模式：通过 FormData 传输二进制流
+        const formData = new FormData();
+        formData.append('file', file);
+        res = await fetch('/api/v1/upload_pdf', {
+          method: 'POST',
+          body: formData,
+        });
+      }
+      
       const data = await res.json();
 
       if (data.documentId) {

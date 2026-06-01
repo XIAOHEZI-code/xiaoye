@@ -73,7 +73,9 @@ def create_worker_graph(deep_mode: bool = False):
     # ------------------------------------------------------------------
     async def researcher_node(state: AgentState):
         """Single-task executor. Stop searching when you have enough — don't gold-plate."""
-        task_description = state["messages"][0].content
+        # 提取真实的原始任务内容以备打印/记录和工具加载 (排除系统干预消息)
+        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
+        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
         logger.info("[Researcher] Executing task: %s...", task_description[:50])
 
         # Extract injected system intervention from compactor, if any
@@ -89,28 +91,22 @@ def create_worker_graph(deep_mode: bool = False):
             "【自主决策原则】：你就是决定何时停止检索的人。如果已有足够资料回答，立即停止调用工具，直接给出答案。"
             "宁可给出有据可查的不完整回答，也不要为了'完美匹配'反复搜索。"
             "当资料库中没有直接答案时，坦诚说明，给出已知的最相关数据即可。"
-            "不要 Gold-Plate：一次检索命中主题相关内容即可，不需要穷举所有可能的搜索词。"
+            "不要 Gold-Plate：一次检索命中主题相关内容即可，不需要穷举所有可能的搜索词。\n\n"
+            "【检索纪律】\n"
+            "1. 在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。\n"
+            "2. 如果你发现上一次检索没有查到结果，**绝对不要**使用相同的关键词再次检索！请尝试更改为同义词、上位概念。\n"
+            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。"
         )
 
-        user_prompt = (
-            f"任务指令: '{task_description}'\n{feedback}\n"
-            "请立即调用合适的工具查证所需事实。\n"
-            "注意：\n"
-            "1. 在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。\n"
-            "2. 如果你发现上一次检索没有查到结果，**绝对不要**使用相同的关键词再次检索！由于后台支持语义向量(Embedding)检索，请尝试更改为同义词、上位概念，或者直接输入完整的自然语言疑问句。\n"
-            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。\n"
-            "4. 如果你认为已有资料足以回答（哪怕不完美），就不要继续调用工具——直接给答案。"
-        )
+        if feedback:
+            sys_prompt += f"\n\n{feedback}"
 
         # [M5] Probe environment to load only relevant tools
         relevant_tools = tool_loader.probe_environment(task_description)
         dynamic_llm = llm.bind_tools(relevant_tools)
 
-        msgs_to_send = (
-            [SystemMessage(content=sys_prompt)]
-            + state["messages"][1:]
-            + [HumanMessage(content=user_prompt)]
-        )
+        # 把 researcher 特有指令插在 messages 队列的最前面
+        msgs_to_send = [SystemMessage(content=sys_prompt)] + list(state["messages"])
 
         response = await dynamic_llm.ainvoke(msgs_to_send)
 
@@ -244,7 +240,9 @@ def create_worker_graph(deep_mode: bool = False):
     # ------------------------------------------------------------------
     async def synthesizer_node(state: AgentState):
         """Generate the final comprehensive answer using all collected tool outputs, WITHOUT any tool calls."""
-        task_description = state["messages"][0].content
+        # 从历史消息中提取原始提问作为任务描述，避免取到中间产生的 ToolMessage
+        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
+        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
 
         # Collect all tool outputs from the message history
         tool_outputs = []
@@ -255,18 +253,19 @@ def create_worker_graph(deep_mode: bool = False):
         collected = "\n\n---\n\n".join(tool_outputs) if tool_outputs else "无检索资料"
 
         system_prompt = (
-            "你是一名冶金领域的研究生。请基于检索到的资料，生成最终的综合回答。绝对不要调用任何工具。\n"
+            "你是一名冶金领域的研究生。请结合之前的对话历史和刚才检索到的资料，生成最终的综合回答。绝对不要调用任何工具。\n"
             "【强制要求】你的回答中必须标注信息来源，格式为：[来源: 文件名, p.页码]。"
             "引用具体数据时必须注明来源出处。\n"
             "【长度要求】请生成详尽完整的回答（不少于500字），包含具体数据、分析逻辑、因果解释和来源标注。"
             "对于涉及机理分析的问题，请展开说明完整的因果链条。"
         )
-        user_prompt = (
-            "任务: {}\n\n"
+        
+        # 将收集的工具资料作为最后一条 HumanMessage 给到合成器
+        synthesis_prompt = (
             "以下是从资料库中检索到的相关资料:\n{}\n\n"
             "请基于以上资料生成综合回答。如果资料不足以回答，请明确指出缺失的信息。\n"
             "【重要提醒】务必在引用数据时标注来源（如：根据[来源: test.pdf, p.4]的数据显示...）"
-        ).format(task_description, collected)
+        ).format(collected)
 
         logger.info(
             "[Synthesizer] Generating final answer from %d tool outputs for task: %s...",
@@ -274,7 +273,17 @@ def create_worker_graph(deep_mode: bool = False):
             task_description[:50],
         )
 
-        msgs = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        # 过滤掉 state["messages"] 中的 ToolMessage 以及包含 tool_calls 的 AIMessage
+        # 避免文献资料被重复拼接灌入，导致 Token 翻倍和击穿窗口
+        filtered_messages = []
+        for m in state["messages"]:
+            if isinstance(m, ToolMessage):
+                continue
+            if isinstance(m, AIMessage) and getattr(m, "tool_calls", None):
+                continue
+            filtered_messages.append(m)
+
+        msgs = [SystemMessage(content=system_prompt)] + filtered_messages + [HumanMessage(content=synthesis_prompt)]
         response = await llm_without_tools.ainvoke(msgs)
 
         return {
@@ -337,7 +346,7 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
     deep_mode = payload.get("deep_mode", False)
     graph = create_worker_graph(deep_mode=deep_mode)
     state = {
-        "messages": [SystemMessage(content=payload["task_description"])],
+        "messages": payload["messages"],
         "step_satisfied": False,
         "past_steps": [],
         "ready_to_synthesize": False,

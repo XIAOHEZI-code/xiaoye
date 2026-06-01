@@ -11,7 +11,9 @@ PDF 上传路由 — 含自动索引管线触发
 import hashlib
 import uuid
 import os
+import shutil
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, BackgroundTasks
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.core.logger import setup_logger
@@ -107,6 +109,71 @@ async def upload_pdf(
         "documentId": doc_id,
         "filename": file.filename,
         "message": "上传成功，正在后台索引（约 1-3 分钟后可检索）",
+    }
+
+
+class LocalUploadRequest(BaseModel):
+    filepath: str
+
+@router.post("/upload_local_pdf")
+async def upload_local_pdf(
+    req: LocalUploadRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db_session),
+):
+    """
+    Electron 专供极速上传通道：
+    直接通过绝对路径读取本地文件，规避 HTTP form-data 封包解包的内存消耗，打破大小限制。
+    """
+    if not os.path.exists(req.filepath) or not req.filepath.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="文件不存在或不是 PDF")
+
+    filename = os.path.basename(req.filepath)
+    logger.info(f"Received local file upload request: {req.filepath}")
+
+    from src.ingestion.dedup import DedupChecker
+    
+    # 读文件以计算 Hash
+    with open(req.filepath, "rb") as f:
+        content = f.read()
+    file_hash = DedupChecker.compute_hash(content)
+
+    # 防重检查
+    existing = DedupChecker.check_existing(file_hash)
+    if existing:
+        logger.info(f"Fast resume hit for {filename} -> doc_id: {existing['id']}")
+        return {
+            "status": "fast_resume",
+            "message": "File already exists",
+            "documentId": existing["id"],
+            "filename": existing["filename"],
+        }
+
+    # 保存文件（直接硬拷贝，速度极快）
+    doc_id = str(uuid.uuid4())
+    real_path = os.path.join(STORAGE_DIR, f"{doc_id}.pdf")
+    shutil.copy(req.filepath, real_path)
+
+    # 写入数据库（pending）
+    db_doc = DocumentMetadata(
+        id=doc_id,
+        filename=filename,
+        hash=file_hash,
+        real_path=real_path,
+        status="pending",
+    )
+    db.add(db_doc)
+    db.commit()
+
+    # 触发后台索引管线
+    logger.info(f"Triggering ingestion pipeline for {doc_id} ({filename})")
+    background_tasks.add_task(run_ingestion_pipeline_task, doc_id, real_path, filename)
+
+    return {
+        "status": "success",
+        "documentId": doc_id,
+        "filename": filename,
+        "message": "极速入库成功，正在后台索引（约 1-3 分钟后可检索）",
     }
 
 

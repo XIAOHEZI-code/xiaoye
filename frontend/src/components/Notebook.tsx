@@ -11,7 +11,7 @@ interface Props {
   onChatSubmit: (message: string, deepMode: boolean) => void;
   deepMode: boolean;
   onDeepModeToggle: (deepMode: boolean) => void;
-  onCitationClick?: (pageNumber: number, docId?: string) => void;  // 引用角标点击回调
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;  // 引用角标点击回调
 }
 
 /**
@@ -96,7 +96,7 @@ const CITATION_REGEX = /\[来源:\s*([^,\]]+?)(?:,\s*p\.?(\d+))?\]/g;
 
 const CitationText: React.FC<{
   text: string;
-  onCitationClick?: (pageNumber: number, docId?: string) => void;
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;
 }> = ({ text, onCitationClick }) => {
   if (!onCitationClick) return <>{text}</>;
 
@@ -114,12 +114,19 @@ const CitationText: React.FC<{
     const page = match[2] ? parseInt(match[2], 10) : null;
     const label = page ? `📎 ${filename} p.${page}` : `📎 ${filename}`;
 
+    // 提取引用标注前方 30~60 个字符作为高亮匹配关键词
+    const contextStart = Math.max(0, match.index - 60);
+    const rawContext = text.slice(contextStart, match.index).trim();
+    // 取最后一个完整句子片段（从最近的句号/逗号/换行处截断）
+    const sentenceBreak = rawContext.search(/[。，,.\n]/);
+    const highlightText = sentenceBreak >= 0 ? rawContext.slice(sentenceBreak + 1).trim() : rawContext;
+
     parts.push(
       <button
         key={`cite-${match.index}`}
         onClick={(e) => {
           e.stopPropagation();
-          if (page) onCitationClick(page);
+          if (page) onCitationClick(page, filename, highlightText || undefined);
         }}
         title={page ? `点击跳转到 ${filename} 第 ${page} 页` : filename}
         style={{
@@ -168,7 +175,7 @@ const CitationText: React.FC<{
 const MarkdownRenderer: React.FC<{
   content: string;
   className?: string;
-  onCitationClick?: (pageNumber: number, docId?: string) => void;
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;
 }> = ({ content, className, onCitationClick }) => {
   const processed = preprocessLatex(content);
   return (

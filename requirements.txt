@@ -34,4 +34,4 @@ torch>=2.2.1
 torchvision>=0.17.1
 
 # Utilities
-python-dotenv>=1.0.1
+python-dotenv>=1.0.1sse_starlette>=2.0.0

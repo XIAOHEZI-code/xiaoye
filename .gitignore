@@ -123,9 +123,7 @@ paper/
 # Experiment & scratch scripts & tests
 kg_experiments/
 scripts/
-tests/
 temp/
-test_*.py
 generate_chart.py
 scratch_*.py
 frontend/debug_puppeteer.js
