@@ -35,6 +35,7 @@ jobs:
         QWEN_API_KEY: "mock_api_key_for_test"
         QWEN_BASE_URL: "http://localhost:8000"
         CELERY_BROKER_URL: "redis://localhost:6379/0"
+        PYTHONPATH: ${{ github.workspace }}
       run: |
         # 运行测试并生成终端 coverage 报告和 xml 格式报告
         # 如果测试覆盖率低于 80%，CI 将会报错截断 (--cov-fail-under=80 可以日后开启)
