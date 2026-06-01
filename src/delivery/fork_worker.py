@@ -348,8 +348,28 @@ async def dispatch_fork_subagent(
     # ---- Crop image from PDF ----
     from src.tools.pdf_cropper import crop_pdf_to_base64_png
 
-    img_b64 = crop_pdf_to_base64_png(pdf_path, bbox.get("pageNumber", 1), bbox)
-    _save_cropped_image(img_b64, task_id)
+    try:
+        img_b64 = crop_pdf_to_base64_png(pdf_path, bbox.get("pageNumber", 1), bbox)
+        _save_cropped_image(img_b64, task_id)
+    except Exception as crop_err:
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "patch": (
+                        f"\n\n**Error:** PDF 文件裁剪失败 — {crop_err}\n"
+                        f"文档路径: `{pdf_path}`\n"
+                    ),
+                }
+            ),
+        )
+        # 发送结束信号，防止前端僵尸任务
+        await redis_client.publish(
+            "xiaoye_sse", json.dumps({"task_id": task_id, "patch": "\n\n---\n"})
+        )
+        print(f"[ForkSubagent] Task {task_id} failed at PDF crop: {crop_err}")
+        return
 
     # ---- Publish fork_start SSE event ----
     await redis_client.publish(

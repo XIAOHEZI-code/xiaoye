@@ -600,3 +600,4 @@ body {
 [data-theme="light"] .notebook-content blockquote {
   background: rgba(196, 97, 46, 0.04);
 }
+\n.window-control-btn {\n  width: 46px;\n  height: 100%;\n  background: transparent;\n  border: none;\n  color: var(--text-secondary);\n  cursor: pointer;\n  display: flex;\n  justify-content: center;\n  align-items: center;\n  transition: background 0.2s;\n}\n.window-control-btn:hover {\n  background: rgba(128, 128, 128, 0.2);\n}\n.window-control-btn.close-btn:hover {\n  background: #e81123;\n  color: white !important;\n}\n

@@ -11,6 +11,7 @@ interface Props {
   onChatSubmit: (message: string, deepMode: boolean) => void;
   deepMode: boolean;
   onDeepModeToggle: (deepMode: boolean) => void;
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;  // 引用角标点击回调
 }
 
 /**
@@ -89,15 +90,120 @@ function separateStatusAndBody(content: string): { statusText: string; bodyText:
 }
 
 /**
- * 可复用的 Markdown 渲染组件（含 LaTeX 支持）
+ * 解析文本中的 [来源: xxx.pdf, p.N] 标注，渲染为可点击的蓝色角标按钮
  */
-const MarkdownRenderer: React.FC<{ content: string; className?: string }> = ({ content, className }) => {
+const CITATION_REGEX = /\[来源:\s*([^,\]]+?)(?:,\s*p\.?(\d+))?\]/g;
+
+const CitationText: React.FC<{
+  text: string;
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;
+}> = ({ text, onCitationClick }) => {
+  if (!onCitationClick) return <>{text}</>;
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  const regex = new RegExp(CITATION_REGEX.source, 'g');
+
+  while ((match = regex.exec(text)) !== null) {
+    // 前缀纯文本
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    const filename = match[1].trim();
+    const page = match[2] ? parseInt(match[2], 10) : null;
+    const label = page ? `📎 ${filename} p.${page}` : `📎 ${filename}`;
+
+    // 提取引用标注前方 30~60 个字符作为高亮匹配关键词
+    const contextStart = Math.max(0, match.index - 60);
+    const rawContext = text.slice(contextStart, match.index).trim();
+    // 取最后一个完整句子片段（从最近的句号/逗号/换行处截断）
+    const sentenceBreak = rawContext.search(/[。，,.\n]/);
+    const highlightText = sentenceBreak >= 0 ? rawContext.slice(sentenceBreak + 1).trim() : rawContext;
+
+    parts.push(
+      <button
+        key={`cite-${match.index}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (page) onCitationClick(page, filename, highlightText || undefined);
+        }}
+        title={page ? `点击跳转到 ${filename} 第 ${page} 页` : filename}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          padding: '1px 8px',
+          margin: '0 2px',
+          background: 'rgba(59, 130, 246, 0.12)',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: '4px',
+          color: '#60a5fa',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          cursor: page ? 'pointer' : 'default',
+          verticalAlign: 'middle',
+          lineHeight: 1.4,
+          transition: 'all 0.15s ease',
+          textDecoration: 'none',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)';
+          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.6)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = 'rgba(59, 130, 246, 0.12)';
+          e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.3)';
+        }}
+      >
+        {label}
+      </button>
+    );
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+
+  return parts.length > 0 ? <>{parts}</> : <>{text}</>;
+};
+
+/**
+ * 可复用的 Markdown 渲染组件（含 LaTeX 支持 + 引用角标点击跳转）
+ */
+const MarkdownRenderer: React.FC<{
+  content: string;
+  className?: string;
+  onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;
+}> = ({ content, className, onCitationClick }) => {
   const processed = preprocessLatex(content);
   return (
     <div className={className}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
+        components={{
+          // 拦截所有文本节点，将其中的 [来源: ...] 标注替换为可点击组件
+          p: ({ children, ...props }) => (
+            <p {...props}>
+              {React.Children.map(children, child =>
+                typeof child === 'string'
+                  ? <CitationText text={child} onCitationClick={onCitationClick} />
+                  : child
+              )}
+            </p>
+          ),
+          li: ({ children, ...props }) => (
+            <li {...props}>
+              {React.Children.map(children, child =>
+                typeof child === 'string'
+                  ? <CitationText text={child} onCitationClick={onCitationClick} />
+                  : child
+              )}
+            </li>
+          ),
+        }}
       >
         {processed}
       </ReactMarkdown>
@@ -105,7 +211,7 @@ const MarkdownRenderer: React.FC<{ content: string; className?: string }> = ({ c
   );
 };
 
-const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit, deepMode, onDeepModeToggle }) => {
+const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit, deepMode, onDeepModeToggle, onCitationClick }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showThinking, setShowThinking] = useState(false);
@@ -210,7 +316,7 @@ const Notebook: React.FC<Props> = ({ content, thinkingContent, onChatSubmit, dee
                             <MarkdownRenderer content={statusText} />
                           </div>
                         )}
-                        <MarkdownRenderer content={bodyText || msg.content} />
+                        <MarkdownRenderer content={bodyText || msg.content} onCitationClick={onCitationClick} />
                       </>
                     );
                   })()}

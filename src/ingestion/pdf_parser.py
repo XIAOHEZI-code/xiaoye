@@ -117,6 +117,75 @@ def _get_page_from_toc(chunk_text: str, toc_entries: list) -> int:
     return best_page
 
 
+def _build_page_map(md_text: str, toc_entries: list) -> list[int]:
+    """构建 Markdown 每一行的页码映射表。
+
+    数据源（优先级从高到低）：
+    1. 图片引用锚点: ![](_page_N_xxx) → 该行属于第 N+1 页 (Marker 页码0-indexed)
+    2. TOC 标题锚点: 行文本匹配到 TOC entry 的 title → 使用该 entry 的 page_id+1
+    3. 前向继承: 未匹配到任何锚点的行 → 继承上一个已知页码
+
+    Returns:
+        list[int]: 与 md_text.split('\\n') 等长的页码列表 (1-indexed, -1=未知)
+    """
+    import re
+
+    lines = md_text.split("\n")
+    page_map = [-1] * len(lines)
+
+    # Pass 1: 图片引用锚点 — ![](_page_N_xxx.jpeg)
+    img_pattern = re.compile(r"!\[.*?\]\(.*?_page_(\d+)_.*?\)")
+    for i, line in enumerate(lines):
+        m = img_pattern.search(line)
+        if m:
+            page_map[i] = int(m.group(1)) + 1  # 0-indexed → 1-indexed
+
+    # Pass 2: TOC 标题匹配
+    if toc_entries:
+        # 按 page_id 排序，确保从前到后
+        sorted_toc = sorted(
+            [e for e in toc_entries if e.get("title") and e.get("page_id", -1) >= 0],
+            key=lambda e: e["page_id"],
+        )
+        for i, line in enumerate(lines):
+            if page_map[i] > 0:
+                continue  # 已被图片锚点标注
+            clean_line = re.sub(r"[#*`\[\]()>_~\\|]", "", line).strip()
+            if not clean_line or len(clean_line) < 2:
+                continue
+            for entry in sorted_toc:
+                title = entry["title"].strip()
+                if len(title) >= 2 and title in clean_line:
+                    page_map[i] = entry["page_id"] + 1
+                    break
+
+    # Pass 3: 前向继承 — 未标注的行继承上一个已知页码
+    # 第一页默认从 page 1 开始
+    last_known = 1
+    for i in range(len(page_map)):
+        if page_map[i] > 0:
+            last_known = page_map[i]
+        else:
+            page_map[i] = last_known
+
+    return page_map
+
+
+def _get_chunk_page(chunk_start_line: int, chunk_end_line: int, page_map: list[int]) -> int:
+    """从 page_map 中取 chunk 覆盖行范围内出现最多的页码（众数策略）。"""
+    from collections import Counter
+
+    start = max(0, chunk_start_line)
+    end = min(len(page_map), chunk_end_line + 1)
+    if start >= end:
+        return page_map[start] if start < len(page_map) else -1
+
+    pages_in_range = page_map[start:end]
+    counter = Counter(pages_in_range)
+    # 返回出现次数最多的页码
+    return counter.most_common(1)[0][0]
+
+
 def split_markdown_into_chunk_documents(
     md_text: str,
     out_metadata: dict,
@@ -131,42 +200,64 @@ def split_markdown_into_chunk_documents(
 
     import jieba
 
-    # Build TOC entries for page number extraction
+    # Build page map for accurate page number assignment
     toc_entries = out_metadata.get("table_of_contents", []) if out_metadata else []
+    page_map = _build_page_map(md_text, toc_entries)
 
-    # Simple semantic splitting based on double newlines
+    # Track line positions for each paragraph
+    lines = md_text.split("\n")
+    # Build paragraph → line range mapping
+    # Paragraphs are separated by double newlines (\n\n = empty line between blocks)
     paragraphs = md_text.split("\n\n")
 
-    current_chunk = ""
+    # Calculate the starting line index of each paragraph
+    para_start_lines = []
+    current_line = 0
     for p in paragraphs:
+        para_start_lines.append(current_line)
+        # Each paragraph spans its own lines + 1 empty line separator (except last)
+        current_line += p.count("\n") + 1 + 1  # +1 for lines in paragraph, +1 for \n\n separator
+
+    current_chunk = ""
+    chunk_start_para = 0  # Index into paragraphs[] for current chunk's start
+
+    for para_idx, p in enumerate(paragraphs):
         if len(current_chunk) + len(p) > chunk_size and current_chunk:
-            page_number = _get_page_from_toc(current_chunk, toc_entries)
-            bbox = None
+            # Determine line range for this chunk
+            chunk_start_line = para_start_lines[chunk_start_para]
+            chunk_end_line = para_start_lines[para_idx] - 1 if para_idx < len(para_start_lines) else len(lines) - 1
+            page_number = _get_chunk_page(chunk_start_line, chunk_end_line, page_map)
 
             doc = make_text_chunk(
                 text=current_chunk,
                 doc_id=doc_id,
                 source_pdf_id=source_pdf_id,
                 page_number=page_number,
-                bbox=bbox,
+                bbox=None,
             )
             chunks.append(doc)
             # Take overlap: simple string slicing for prototyping
-            current_chunk = (
-                current_chunk[-chunk_overlap:] + "\n\n" + p if chunk_overlap > 0 else p
-            )
+            if chunk_overlap > 0:
+                current_chunk = current_chunk[-chunk_overlap:] + "\n\n" + p
+                # After overlap, the new chunk conceptually starts from this paragraph
+                chunk_start_para = para_idx
+            else:
+                current_chunk = p
+                chunk_start_para = para_idx
         else:
             current_chunk += ("\n\n" + p) if current_chunk else p
 
     if current_chunk.strip():
-        page_number = _get_page_from_toc(current_chunk, toc_entries)
-        bbox = None
+        chunk_start_line = para_start_lines[chunk_start_para] if chunk_start_para < len(para_start_lines) else 0
+        chunk_end_line = len(lines) - 1
+        page_number = _get_chunk_page(chunk_start_line, chunk_end_line, page_map)
+
         doc = make_text_chunk(
             text=current_chunk,
             doc_id=doc_id,
             source_pdf_id=source_pdf_id,
             page_number=page_number,
-            bbox=bbox,
+            bbox=None,
         )
         chunks.append(doc)
 

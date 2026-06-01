@@ -75,63 +75,21 @@ async def dispatch_chat_worker(
         raw_vlm = await r.get(vlm_key)
         vlm_context = raw_vlm.decode("utf-8") if raw_vlm else None
 
-        # ── Step 2: 组装任务描述 (Task Description) ──────────────────────────────
-        # 记忆前缀（注入到所有模式）
-        memory_prefix = (
-            f"\n\n【长程记忆】\n{memory_context}\n" if memory_context else ""
-        )
-        history_str = (
-            "\n".join(
-                [f"用户: {h['user']}\n小冶: {h['assistant']}" for h in history[-6:]]
-            )
-            if history
-            else ""
-        )
+        # ── Step 2: 组装任务描述 (Context Componentization) ──────────────────────────────
+        from src.delivery.context_builder import build_system_prompt, build_and_compact_history
+        from langchain_core.messages import HumanMessage
 
-        if vlm_context:
-            # 模式 A: VLM 精准上下文追问
-            task_description = (
-                "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
-                "请基于下方视觉大模型对论文图表的分析结果，向导师做详细的汇报。\n"
-                "**强制要求**：务必直接给出具体数据，而不是文字堆砌。如果有任何可用的图片Markdown格式信息，请必须在回答中将其渲染出来。\n"
-                f"{memory_prefix}\n"
-                f"【VLM 视觉分析结果】\n{vlm_context}\n\n"
-                f"【对话历史】\n{history_str}\n\n"
-                f"【导师（用户）问题】\n{message}"
-            )
-        else:
-            # 模式 B/C: 文献检索增强 / 通用知识问答
-            if deep_mode:
-                task_description = (
-                    "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
-                    "【深度模式已激活】：本次对话将启动高级知识图谱增强检索(HyDE)。"
-                    "你必须**立即调用 search_available_tools 工具**加载图谱增强检索后，再进行解答。"
-                    "深度模式下，请给出详尽分析（不少于800字），包含完整的因果链条和机制解释。\n"
-                    "**强制要求**：\n"
-                    "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
-                    "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
-                    f"{memory_prefix}\n"
-                    f"【对话历史】\n{history_str}\n\n"
-                    f"【导师（用户）问题】\n{message}"
-                )
-            else:
-                task_description = (
-                    "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
-                    "现在你需要回答导师的问题。如果需要事实支持，请自主调用基础检索工具查找资料。\n"
-                    "【高级工具加载原则】：如果你发现问题涉及复杂的冶金机理、工艺因果关系，或是基础检索找不到答案，你**必须首先调用 search_available_tools 工具**，搜索并挂载高级图谱增强(HyDE)或代码沙盒工具后，再进行解答！\n"
-                    "【快速模式】：优先使用基础检索回答。仅在基础检索确实找不到相关资料时，才调用 search_available_tools 加载高级工具。\n"
-                    "**强制要求**：\n"
-                    "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
-                    "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置，向导师展示最直观的数据统计图或显微组织图！严禁编造文献库中没有的数据。\n"
-                    f"{memory_prefix}\n"
-                    f"【对话历史】\n{history_str}\n\n"
-                    f"【导师（用户）问题】\n{message}"
-                )
+        system_message = build_system_prompt(deep_mode, memory_context, vlm_context)
+        history_messages = await build_and_compact_history(history)
+        current_message = HumanMessage(content=message)
+
+        # 组合为完整的初始 Message 队列
+        messages_queue = [system_message] + history_messages + [current_message]
 
         # ── Step 3: 调用 Reasoning 智能体管线 (取代原硬编码) ────────────────────
         from src.reasoning.graph import run_worker_pipeline
 
-        payload = {"task_description": task_description, "deep_mode": deep_mode}
+        payload = {"messages": messages_queue, "deep_mode": deep_mode}
 
         # 运行图并自动获取 SSE 推送
         full_response = await run_worker_pipeline(payload, task_id)

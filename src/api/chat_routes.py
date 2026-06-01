@@ -57,11 +57,42 @@ async def background_chat_worker(req: ChatRequest, doc_status: str = "knowledge_
         logger.error(f"Error in background_chat_worker: {e}", exc_info=True)
 
 
+import asyncio
+
+# 会话级别对话队列管理（内存队列，适用于单机部署）
+session_queues: dict[str, asyncio.Queue] = {}
+session_tasks: dict[str, asyncio.Task] = {}
+
+async def process_session_queue(task_id: str):
+    """顺序处理特定会话的对话任务队列（包含空闲回收机制）"""
+    try:
+        while True:
+            try:
+                # 增加 30 分钟空闲超时机制
+                req, doc_status = await asyncio.wait_for(session_queues[task_id].get(), timeout=1800.0)
+                try:
+                    await background_chat_worker(req, doc_status)
+                except Exception as e:
+                    logger.error(f"Error processing queued task for {task_id}: {e}")
+                finally:
+                    session_queues[task_id].task_done()
+            except asyncio.TimeoutError:
+                logger.info(f"[Session Queue] Task {task_id} idle for 30m, auto-cleaning.")
+                break
+    except asyncio.CancelledError:
+        logger.info(f"[Session Queue] Task {task_id} forcibly cancelled.")
+    except Exception as e:
+        logger.error(f"Queue processor error for {task_id}: {e}")
+    finally:
+        session_queues.pop(task_id, None)
+        session_tasks.pop(task_id, None)
+
+
 @router.post("/chat")
 async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
     """
     用户对话 API。
-    立即返回 202 Accepted，后台异步运行 chat_worker 流水线。
+    将任务推入会话专用的异步队列，保证同一会话的对话按顺序执行（事务隔离）。
     结果通过 SSE (/api/v1/notebook/stream) 推送给前端。
     """
     from src.db.session import SessionLocal
@@ -69,7 +100,6 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
     db = SessionLocal()
     doc_status = "knowledge_base"
 
-    # 若提供了 document_id，验证其合法性
     logger.info(
         f"Incoming chat request for task {req.task_id} on doc {req.document_id} [deep_mode={req.deep_mode}]: {req.message[:50]}..."
     )
@@ -87,11 +117,20 @@ async def chat(req: ChatRequest, background_tasks: BackgroundTasks):
         doc_status = doc.status
     db.close()
 
-    background_tasks.add_task(background_chat_worker, req, doc_status)
+    # 初始化会话队列（如果不存在）
+    if req.task_id not in session_queues:
+        session_queues[req.task_id] = asyncio.Queue()
+        # 启动常驻的后台消费任务并记录
+        session_tasks[req.task_id] = asyncio.create_task(process_session_queue(req.task_id))
+
+    # 将新对话放入队列
+    session_queues[req.task_id].put_nowait((req, doc_status))
+
     return {
-        "status": "received",
-        "message": "对话已提交，Agent 正在检索与思考...",
+        "status": "queued",
+        "message": "对话已加入队列，Agent 将按顺序进行处理...",
         "mode": doc_status,
+        "queue_size": session_queues[req.task_id].qsize()
     }
 
 
@@ -145,17 +184,41 @@ async def list_chat_sessions():
         return {"sessions": [], "total": 0}
 
 
-@router.delete("/chat/sessions/{task_id}")
-async def delete_chat_session(task_id: str):
-    """删除指定的对话会话（Redis 中的历史 + VLM 上下文）"""
+@router.get("/chat/sessions/{task_id}")
+async def get_chat_session(task_id: str):
+    """获取指定对话会话的完整历史记录"""
     import redis.asyncio as redis
     from src.core.config import settings
 
     try:
         rc = redis.from_url(settings.CELERY_BROKER_URL)
         async with rc as r:
+            raw = await r.get(f"xiaoye:chat:{task_id}:history")
+            if not raw:
+                return {"task_id": task_id, "history": []}
+            history = json.loads(raw)
+            return {"task_id": task_id, "history": history}
+    except Exception as e:
+        logger.error(f"Failed to get session {task_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/chat/sessions/{task_id}")
+async def delete_chat_session(task_id: str):
+    """删除指定的对话会话（Redis 中的历史 + VLM 上下文 + 终止本地后台队列）"""
+    import redis.asyncio as redis
+    from src.core.config import settings
+
+    try:
+        # 清理 Redis
+        rc = redis.from_url(settings.CELERY_BROKER_URL)
+        async with rc as r:
             await r.delete(f"xiaoye:chat:{task_id}:history")
             await r.delete(f"xiaoye:chat:{task_id}")
+            
+        # 主动终止对应的后台协程，防止内存泄露
+        if task_id in session_tasks:
+            session_tasks[task_id].cancel()
+            
         return {"status": "deleted", "task_id": task_id}
     except Exception as e:
         logger.error(f"Failed to delete session {task_id}: {e}")

@@ -28,9 +28,10 @@ interface Props {
   onDocumentIdChange: (id: string | null) => void;
   pdfUrl?: string | null;                // 从服务端加载的 PDF URL
   sourceType?: 'uploaded' | 'retrieved'; // 来源类型：上传=蓝底纹，检索=无底纹
+  targetPage?: number | null;            // 外部指令：跳转到指定页码（由引用角标触发）
 }
 
-const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, sourceType = 'uploaded' }) => {
+const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, sourceType = 'uploaded', targetPage }) => {
   const { showToast } = useToast();
   const [file, setFile] = useState<File | string | null>(null); // File 或 URL string
   const [numPages, setNumPages] = useState<number>(0);
@@ -41,6 +42,7 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
   const [brightness, setBrightness] = useState(85);
   // const [contrast, setContrast] = useState(95);
   const [currentSourceType, setCurrentSourceType] = useState<'uploaded' | 'retrieved'>('uploaded');
+  
   
   // Selection Box State
   const [isDrawing, setIsDrawing] = useState(false);
@@ -67,6 +69,23 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
       }
     }
   }, [pdfUrl, sourceType]);
+
+  // 外部跳转指令：当 targetPage 变化时自动翻页 + 闪烁动画
+  const [jumpFlash, setJumpFlash] = React.useState(false);
+  React.useEffect(() => {
+    if (targetPage && targetPage > 0) {
+      // 如果 PDF 还没加载完成（numPages=0），等 numPages 更新后会自动重试
+      if (numPages > 0 && targetPage <= numPages) {
+        setPageNumber(targetPage);
+        // 触发页面闪烁高亮效果（3次脉冲渐隐）
+        setJumpFlash(true);
+        const timer = setTimeout(() => setJumpFlash(false), 2500);
+        return () => clearTimeout(timer);
+      } else if (numPages === 0) {
+        console.log(`[PdfViewer] Waiting for PDF to load... targetPage=${targetPage}`);
+      }
+    }
+  }, [targetPage, numPages]);
 
   async function onFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const { files } = event.target;
@@ -292,6 +311,20 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
               transition: 'filter 0.2s ease',
             }}
           >
+            {/* 引用跳转闪烁高亮覆盖层 — 3次脉冲金色光晕 */}
+            {jumpFlash && (
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                background: 'linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(251, 191, 36, 0.12))',
+                pointerEvents: 'none',
+                zIndex: 2,
+                borderRadius: '4px',
+                border: '2px solid rgba(250, 204, 21, 0.4)',
+                boxShadow: '0 0 20px rgba(250, 204, 21, 0.15), inset 0 0 30px rgba(250, 204, 21, 0.08)',
+                animation: 'citationPulse 2.5s ease-out forwards',
+              }} />
+            )}
             {/* 蓝色底纹覆盖层：仅用户上传的文档显示 */}
             {currentSourceType === 'uploaded' && (
               <div style={{
@@ -347,6 +380,20 @@ const PdfViewer: React.FC<Props> = ({ onForkTask, onDocumentIdChange, pdfUrl, so
           </div>
         )}
       </div>
+
+      {/* 引用跳转脉冲动画 — 3次金色光晕后渐隐 */}
+      <style>{`
+        @keyframes citationPulse {
+          0% { opacity: 0; }
+          8% { opacity: 1; }
+          20% { opacity: 0.3; }
+          35% { opacity: 0.9; }
+          50% { opacity: 0.2; }
+          65% { opacity: 0.7; }
+          80% { opacity: 0.15; }
+          100% { opacity: 0; border-color: transparent; box-shadow: none; }
+        }
+      `}</style>
     </div>
   );
 };

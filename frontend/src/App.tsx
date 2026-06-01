@@ -7,6 +7,7 @@ import Resizer from './components/Resizer';
 import AskUserModal, { type AskUserEventData } from './components/AskUserModal';
 import { useToast } from './components/Toast';
 import { KnowledgeGraphViewer } from './components/KnowledgeGraphViewer';
+import { TitleBar } from './components/TitleBar';
 import { Network } from 'lucide-react';
 
 // localStorage 持久化键
@@ -16,6 +17,11 @@ const THINKING_KEY = 'xiaoye_thinking_v1';
 const SESSION_ID_KEY = 'xiaoye_session_id_v1';
 const DEFAULT_LAYOUT = { leftWidth: 33, rightWidth: 24 };
 const DEFAULT_NOTEBOOK = '# 工作台\n\n欢迎使用小冶冶金智慧文献服务平台。在左侧载入 PDF 文献，圈选区域并右键触发深入分析...';
+
+// Electron 环境下直接请求后端，跳过 Vite 代理
+const BASE_URL = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron') 
+  ? 'http://localhost:8000' 
+  : '';
 
 function loadLayout() {
   try {
@@ -85,8 +91,32 @@ export type RetrievalSource = {
 function App() {
   const { showToast } = useToast();
   const [activeTasks, setActiveTasks] = useState<TaskEvent[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string>(
+    () => localStorage.getItem('xiaoye_last_session') || `session_${Date.now()}`
+  );
+  
+  // Initialize from last session on mount
+  useEffect(() => {
+    localStorage.setItem('xiaoye_last_session', currentSessionId);
+    // Fetch history from backend
+    fetch(`${BASE_URL}/api/v1/chat/sessions/${currentSessionId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.history && data.history.length > 0) {
+          let md = '';
+          data.history.forEach((h: any) => {
+             md += `\n\n---\n**👤 您:** ${h.user}\n\n---\n${h.assistant}`;
+          });
+          setNotebookContent(md);
+        }
+      })
+      .catch(e => console.error("Failed to load session history", e));
+  }, [currentSessionId]);
+
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
-  const [notebookContent, setNotebookContent] = useState<string>(loadNotebook);
+  const [notebookContent, setNotebookContent] = useState<string>(
+    localStorage.getItem(`xiaoye_nb_${currentSessionId}`) || DEFAULT_NOTEBOOK
+  );
   const [thinkingContent, setThinkingContent] = useState<string>(loadThinking);
   const [documents, setDocuments] = useState<{ id: string, filename: string, status: string, created_at: string | null }[]>([]);
   const [knowledgeDocId, setKnowledgeDocId] = useState<string | null>(null);
@@ -98,7 +128,8 @@ function App() {
   const [showGraph, setShowGraph] = useState(false);
   const [deepMode, setDeepMode] = useState(false);
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string>(loadSessionId);
+  // 引用跳转状态：{page, key, highlightText} — key 用于重复点击同一页时也能重新触发
+  const [citationTarget, setCitationTarget] = useState<{page: number, key: number, highlightText?: string} | null>(null);
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
@@ -191,7 +222,11 @@ function App() {
 
   // Setup Server-Sent Events (SSE) Listener
   useEffect(() => {
-    const eventSource = new EventSource("/api/v1/notebook/stream");
+    const eventSource = new EventSource(`${BASE_URL}/api/v1/notebook/stream`);
+
+    eventSource.onopen = () => {
+      console.log("[SSE] Connected to backend stream");
+    };
 
     eventSource.onmessage = (event) => {
       try {
@@ -212,20 +247,26 @@ function App() {
         // Fork VLM: 选区截图推送
         if (data.type === 'fork_start' && data.image_url) {
           const imgUrl = data.image_url.startsWith('/')
-            ? `http://localhost:8000${data.image_url}`
+            ? `${BASE_URL}${data.image_url}`
             : data.image_url;
-          setNotebookContent(prev => prev + `\n\n![📷 选区截图](${imgUrl})\n`);
+          setNotebookContent(prev => prev + `\n\n---\n![📷 选区截图](${imgUrl})\n`);
+          return;
+        }
+
+        // 入库进度推送 — 实时刷新文档列表以显示细粒度状态
+        if (data.type === 'ingestion_progress') {
+          fetchDocuments();
           return;
         }
 
         if (data.type === 'reasoning' && data.thinking) {
           setThinkingContent(prev => prev + data.thinking);
         } else if (data.patch) {
-          // 第一个 patch 到来时：清除占位文字 + 插入分隔符，让 AI 回复独立成段
+          // 第一个 patch 到来时：清除占位文字，不需要再插入分隔符，因为 handleUserChat 已经插入过了
           if (pendingReplace.current) {
             pendingReplace.current = false;
             setNotebookContent(prev =>
-              prev.replace('\n*\u2026小冶思考中...*\n', '\n\n---\n')
+              prev.replace(/\n*\*…小冶思考中\.\.\.\*\n*/g, '\n\n')
             );
           }
           setNotebookContent(prev => prev + data.patch);
@@ -247,10 +288,25 @@ function App() {
     };
   }, []);
 
+  // 僵尸任务自动清理：超过 90 秒未完成的 activeTasks 自动移除
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setActiveTasks(prev => {
+        const cleaned = prev.filter(t => now - (t.timestamp ?? now) < 90_000);
+        if (cleaned.length < prev.length) {
+          console.warn(`[ActiveTasks] Auto-cleaned ${prev.length - cleaned.length} zombie task(s)`);
+        }
+        return cleaned.length < prev.length ? cleaned : prev;
+      });
+    }, 10_000); // 每 10 秒检查一次
+    return () => clearInterval(interval);
+  }, []);
+
   // 加载已上传的PDF列表（可被主动调用刷新）
   const fetchDocuments = async () => {
     try {
-      const res = await fetch("/api/v1/documents");
+      const res = await fetch(`${BASE_URL}/api/v1/documents`);
       const data = await res.json();
       if (data.documents) setDocuments(data.documents);
     } catch {
@@ -261,7 +317,7 @@ function App() {
   // 加载对话会话列表
   const fetchChatSessions = async () => {
     try {
-      const res = await fetch('/api/v1/chat/sessions');
+      const res = await fetch(`${BASE_URL}/api/v1/chat/sessions`);
       const data = await res.json();
       if (data.sessions) setChatSessions(data.sessions);
     } catch {
@@ -287,24 +343,38 @@ function App() {
     showToast('已创建新对话', 'success', 2000);
   };
 
-  // 切换对话
-  const handleSwitchSession = (taskId: string) => {
-    if (taskId === currentSessionId) return;
-    // 保存当前对话
+  // 恢复会话上下文
+  const handleSwitchSession = async (taskId: string) => {
+    // 保存当前内容到 localStorage 避免丢失
     localStorage.setItem(`xiaoye_nb_${currentSessionId}`, notebookContent);
     localStorage.setItem(`xiaoye_tk_${currentSessionId}`, thinkingContent);
-    // 加载目标对话
-    const savedNb = localStorage.getItem(`xiaoye_nb_${taskId}`);
-    const savedTk = localStorage.getItem(`xiaoye_tk_${taskId}`);
+
     setCurrentSessionId(taskId);
-    setNotebookContent(savedNb || DEFAULT_NOTEBOOK);
-    setThinkingContent(savedTk || '');
+    setThinkingContent(localStorage.getItem(`xiaoye_tk_${taskId}`) || '');
+    
+    try {
+      const res = await fetch(`${BASE_URL}/api/v1/chat/sessions/${taskId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.history && data.history.length > 0) {
+          let md = '';
+          data.history.forEach((h: any) => {
+             md += `\n\n---\n**👤 您:** ${h.user}\n\n---\n${h.assistant}`;
+          });
+          setNotebookContent(md);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setNotebookContent(localStorage.getItem(`xiaoye_nb_${taskId}`) || DEFAULT_NOTEBOOK);
   };
 
   // 删除对话
   const handleDeleteSession = async (taskId: string) => {
     try {
-      await fetch(`/api/v1/chat/sessions/${taskId}`, { method: 'DELETE' });
+      await fetch(`${BASE_URL}/api/v1/chat/sessions/${taskId}`, { method: 'DELETE' });
       // 清理 localStorage
       localStorage.removeItem(`xiaoye_nb_${taskId}`);
       localStorage.removeItem(`xiaoye_tk_${taskId}`);
@@ -333,7 +403,7 @@ function App() {
     setActiveTasks(prev => [...prev, newTask]);
 
     try {
-      await fetch("/api/v1/fork_agent", {
+      await fetch(`${BASE_URL}/api/v1/fork_agent`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ taskId, documentId, type, bbox })
@@ -353,14 +423,14 @@ function App() {
     const docId = currentDocumentId || null;
     const taskId = currentSessionId;
 
-    // 立即显示用户消息，加占位符
-    setNotebookContent(prev => prev + `\n\n---\n**\ud83d\udc64 \u60a8:** ${message}\n\n*\u2026小冶思考中...*\n`);
+    // 立即显示用户消息，并在后方加上分隔符，确保 AI 的回复一定在一个新的 segment 里！
+    setNotebookContent(prev => prev + `\n\n---\n**👤 您:** ${message}\n\n---\n*…小冶思考中...*\n`);
     // 标记等待第一个 patch 替换占位文字
     pendingReplace.current = true;
     setThinkingContent('');
 
     try {
-      const res = await fetch("/api/v1/chat", {
+      const res = await fetch(`${BASE_URL}/api/v1/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -386,7 +456,7 @@ function App() {
   const handleAskUserReply = async (askId: string, taskId: string, reply: string) => {
     setAskUserEvent(null);
     try {
-      await fetch('/api/v1/ask_user/reply', {
+      await fetch(`${BASE_URL}/api/v1/ask_user/reply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ask_id: askId, task_id: taskId, reply }),
@@ -405,32 +475,64 @@ function App() {
     ? documents.find(d => d.id === knowledgeDocId)?.filename
     : null;
 
-  return (
-    <>
-      {/* 主题切换按钮 */}
-      <div style={{
-        position: 'fixed',
-        top: '12px',
-        right: '12px',
-        zIndex: 1000,
-        padding: '8px 12px',
-        background: 'var(--panel-bg)',
-        border: '1px solid var(--glass-border)',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        fontSize: '0.85rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        color: 'var(--text-secondary)',
-        transition: 'border-color 0.2s',
-      }} onClick={toggleTheme}>
-        {theme === 'dark' ? '🌙 暗色' : '☀️ 亮色'}
-      </div>
+  // 引用角标点击回调：Notebook → PdfViewer 页码跳转 + 段落高亮
+  const handleCitationClick = useCallback((pageNumber: number, docIdOrFilename?: string, highlightText?: string) => {
+    let targetDocId = docIdOrFilename;
 
-      {/* 知识图谱视图按钮 */}
-      <div style={{
-        position: 'fixed',
+    // 如果传入的不是 UUID 格式，尝试通过 filename 查找文档
+    if (docIdOrFilename && !docIdOrFilename.match(/^[0-9a-f]{8}-/)) {
+      const matchedDoc = documents.find(d =>
+        d.filename === docIdOrFilename ||
+        d.filename.includes(docIdOrFilename.replace('.pdf', '')) ||
+        docIdOrFilename.includes(d.filename.replace('.pdf', ''))
+      );
+      if (matchedDoc) {
+        targetDocId = matchedDoc.id;
+      }
+    }
+
+    // 加载对应文档的 PDF（如果尚未加载或需要切换）
+    if (targetDocId && targetDocId !== currentDocumentId) {
+      setPdfUrl(`${BASE_URL}/api/v1/documents/${targetDocId}/pdf`);
+      setPdfSourceType('retrieved');
+      setCurrentDocumentId(targetDocId);
+    }
+
+    // 设置跳转目标（用 Date.now() 作 key，确保重复点击同一页也会触发）
+    setCitationTarget({ page: pageNumber, key: Date.now(), highlightText });
+  }, [currentDocumentId, documents]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      {/* 自定义窗口拖拽栏与控制按钮（仅在 Electron 环境渲染） */}
+      <TitleBar />
+      
+      {/* 下方主要工作区 */}
+      <div style={{ position: 'relative', flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* 主题切换按钮 */}
+        <div style={{
+          position: 'absolute',
+          top: '12px',
+          right: '12px',
+          zIndex: 1000,
+          padding: '8px 12px',
+          background: 'var(--panel-bg)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          fontSize: '0.85rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          color: 'var(--text-secondary)',
+          transition: 'border-color 0.2s',
+        }} onClick={toggleTheme}>
+          {theme === 'dark' ? '🌙 暗色' : '☀️ 亮色'}
+        </div>
+
+        {/* 知识图谱视图按钮 */}
+        <div style={{
+          position: 'absolute',
         top: '12px',
         right: '100px',
         zIndex: 1000,
@@ -448,10 +550,10 @@ function App() {
       }} onClick={() => setShowGraph(true)}>
         <Network size={16} style={{ color: '#3b82f6' }} />
         <span style={{ fontWeight: 500, color: 'rgba(59, 130, 246, 0.9)' }}>图谱全景</span>
-      </div>
+        </div>
 
-      {/* 主布局 */}
-      <div ref={containerRef} className="app-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        {/* 主布局 */}
+        <div ref={containerRef} className="app-container" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* 左栏：PDF 文献阅读（用宽度过渡折叠，不用条件渲染） */}
         <div
@@ -478,6 +580,8 @@ function App() {
               onDocumentIdChange={handleDocumentIdChange}
               pdfUrl={pdfUrl}
               sourceType={pdfSourceType}
+              targetPage={citationTarget?.page ?? null}
+              key={citationTarget?.key}
             />
           </div>
         </div>
@@ -545,6 +649,7 @@ function App() {
               onChatSubmit={handleUserChat}
               deepMode={deepMode}
               onDeepModeToggle={setDeepMode}
+              onCitationClick={handleCitationClick}
             />
           </div>
         </div>
@@ -574,7 +679,7 @@ function App() {
               setKnowledgeDocId(id);
               setCurrentDocumentId(id);
               // 用户点击自己上传的文档 → 从服务端加载 + 蓝色底纹
-              setPdfUrl(`/api/v1/documents/${id}/pdf`);
+              setPdfUrl(`${BASE_URL}/api/v1/documents/${id}/pdf`);
               setPdfSourceType('uploaded');
             }}
             onRefresh={fetchDocuments}
@@ -582,10 +687,18 @@ function App() {
               setKnowledgeDocId(docId);
               setCurrentDocumentId(docId);
             }}
+            onDeleteDocument={(docId) => {
+              // 删除后清理选中状态
+              if (knowledgeDocId === docId) setKnowledgeDocId(null);
+              if (currentDocumentId === docId) {
+                setCurrentDocumentId(null);
+                setPdfUrl(null);
+              }
+            }}
             retrievalSources={retrievalSources}
             onRetrievedSelect={(docId) => {
               // 用户点击检索到的文献 → 从服务端加载 + 无底纹
-              setPdfUrl(`/api/v1/documents/${docId}/pdf`);
+              setPdfUrl(`${BASE_URL}/api/v1/documents/${docId}/pdf`);
               setPdfSourceType('retrieved');
               setCurrentDocumentId(docId);
             }}
@@ -608,8 +721,9 @@ function App() {
       />
 
       {/* 知识图谱查看器弹窗 */}
-      {showGraph && <KnowledgeGraphViewer onClose={() => setShowGraph(false)} />}
-    </>
+        {showGraph && <KnowledgeGraphViewer onClose={() => setShowGraph(false)} />}
+      </div>
+    </div>
   );
 }
 
