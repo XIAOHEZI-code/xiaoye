@@ -25,21 +25,25 @@ class GraphLogicTool:
         entity_id = self._normalize_entity(entity_name)
         
         if direction == "out":
-            match_clause = "(s {id: $entity_id})-[r]->(o)"
+            match_clause = "(s)-[r]->(o)"
+            where_clause = "WHERE s.id = $entity_id OR s.name = $entity_name OR toLower(s.name) = toLower($entity_name)"
         elif direction == "in":
-            match_clause = "(s)-[r]->(o {id: $entity_id})"
+            match_clause = "(s)-[r]->(o)"
+            where_clause = "WHERE o.id = $entity_id OR o.name = $entity_name OR toLower(o.name) = toLower($entity_name)"
         else:
-            match_clause = "(s {id: $entity_id})-[r]-(o)"
+            match_clause = "(s)-[r]-(o)"
+            where_clause = "WHERE s.id = $entity_id OR s.name = $entity_name OR toLower(s.name) = toLower($entity_name)"
 
         query = f"""
         MATCH {match_clause}
+        {where_clause}
         RETURN labels(s)[0] AS s_label, s.name AS subject, type(r) AS relation, r.mechanism AS mechanism, r.context AS context, labels(o)[0] AS o_label, o.name AS object, r.doc_id AS source_doc
         LIMIT 20
         """
 
         results = []
         with self.driver.session() as session:
-            records = session.run(query, entity_id=entity_id)
+            records = session.run(query, entity_id=entity_id, entity_name=entity_name)
             for record in records:
                 results.append({
                     "subject": f"{record['subject']} ({record['s_label']})",
@@ -60,14 +64,15 @@ class GraphLogicTool:
         
         # Variable length path traversal
         query = f"""
-        MATCH p = (start {{id: $entity_id}})-[*1..{max_hops}]->(end)
+        MATCH p = (start)-[*1..{max_hops}]->(end)
+        WHERE start.id = $entity_id OR start.name = $start_entity OR toLower(start.name) = toLower($start_entity)
         RETURN [x IN nodes(p) | x.name] AS path_nodes, [r IN relationships(p) | type(r)] AS path_relations
         LIMIT 10
         """
 
         results = []
         with self.driver.session() as session:
-            records = session.run(query, entity_id=entity_id)
+            records = session.run(query, entity_id=entity_id, start_entity=start_entity)
             for record in records:
                 results.append({
                     "nodes": record["path_nodes"],

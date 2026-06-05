@@ -16,12 +16,15 @@ import json
 import os
 import redis.asyncio as redis
 from src.core.config import settings
+from src.core.logger import setup_logger
 from src.delivery.memory import (
     load_preload_context,
     extract_and_save_memory,
     init_global_memory,
 )
 from src.api.askuser_routes import trigger_ask_user, wait_for_user_reply
+
+logger = setup_logger("xiaoye.chat")
 
 
 def _clear_proxy():
@@ -39,6 +42,25 @@ def _clear_proxy():
     os.environ["OPENAI_API_BASE"] = settings.QWEN_BASE_URL
 
 
+def should_use_react_agent(message: str) -> bool:
+    """判断提问是否需要调用复杂的 Agent/ReAct 工具循环"""
+    keywords = [
+        "python", "代码", "运行", "计算", "图谱", "neo4j", "关系", "因果", "影响", "trace", 
+        "sandbox", "沙盒", "仿真", "模拟", "绘制", "曲线", "绘图", "画图", "图表", "图像", 
+        "图片", "可视化", "plot", "chart", "curve",
+        "绘画", "作图", "制图", "折线图", "柱状图", "条形图", "饼图", "散点图", "画个", "画一下", "画出"
+    ]
+    msg_lower = message.lower()
+    return any(kw in msg_lower for kw in keywords)
+
+
+def is_chitchat(message: str) -> bool:
+    """判断提问是否为简单的日常对话/寒暄"""
+    keywords = ["你好", "hello", "hi", "是谁", "主子", "名字", "自我介绍", "谢谢", "再见", "再会", "拜拜"]
+    msg_lower = message.lower()
+    return len(message) < 15 and any(kw in msg_lower for kw in keywords)
+
+
 async def dispatch_chat_worker(
     task_id: str,
     message: str,
@@ -47,7 +69,7 @@ async def dispatch_chat_worker(
     deep_mode: bool = False,
 ):
     """
-    主对话 Worker。接入文献检索技能 (search_metallurgy_text) 并流式推送回复。
+    主对话 Worker。支持文献检索智能路由 (分流闲聊/直接 RAG/多步 ReAct) 并流式推送回复。
 
     Args:
         task_id:     会话 ID（用于 Redis key 隔离）
@@ -75,24 +97,66 @@ async def dispatch_chat_worker(
         raw_vlm = await r.get(vlm_key)
         vlm_context = raw_vlm.decode("utf-8") if raw_vlm else None
 
-        # ── Step 2: 组装任务描述 (Context Componentization) ──────────────────────────────
+        # ── Step 2: 组装任务描述 ─────────────────────────────────────────────
         from src.delivery.context_builder import build_system_prompt, build_and_compact_history
         from langchain_core.messages import HumanMessage
 
         system_message = build_system_prompt(deep_mode, memory_context, vlm_context)
-        history_messages = await build_and_compact_history(history)
+        
+        # 快速模式历史 Token 窗口限制为 2000，深度模式限制为 6000
+        history_budget = 6000 if deep_mode else 2000
+        history_messages = await build_and_compact_history(history, token_budget=history_budget)
         current_message = HumanMessage(content=message)
 
         # 组合为完整的初始 Message 队列
         messages_queue = [system_message] + history_messages + [current_message]
 
-        # ── Step 3: 调用 Reasoning 智能体管线 (取代原硬编码) ────────────────────
-        from src.reasoning.graph import run_worker_pipeline
+        # ── Step 3: 智能路由分发 (分流直连与多步 ReAct) ─────────────────────────
+        use_agent = deep_mode or should_use_react_agent(message)
 
-        payload = {"messages": messages_queue, "deep_mode": deep_mode}
+        if use_agent:
+            # 走有状态多步 ReAct 循环通路
+            from src.reasoning.graph import run_worker_pipeline
+            payload = {"messages": messages_queue, "deep_mode": deep_mode}
+            
+            logger.info(f"[{task_id}][qwen-max][执行: ReAct Agent Pipeline][输入: {message[:50]}...]")
+            full_response = await run_worker_pipeline(payload, task_id)
+            logger.info(f"[{task_id}][qwen-max][执行: ReAct Agent Pipeline][结果: 长度 {len(full_response)} 字符]")
+        else:
+            # 走快速直连流式通路
+            from langchain_openai import ChatOpenAI
+            import asyncio
 
-        # 运行图并自动获取 SSE 推送
-        full_response = await run_worker_pipeline(payload, task_id)
+            if is_chitchat(message):
+                logger.info(f"[{task_id}][qwen-turbo][执行: Chitchat 直连][输入: {message[:50]}...]")
+            else:
+                logger.info(f"[{task_id}][qwen-turbo][执行: Direct RAG 检索][输入: {message[:50]}...]")
+                # 异步检索 ES
+                from src.tooling.definitions import search_metallurgy_text
+                search_result = await asyncio.to_thread(search_metallurgy_text, message)
+                if search_result and "No relevant text documents found." not in search_result:
+                    # 追加文献段落到系统 prompt
+                    context_msg = f"\n\n【搜索召回的参考资料】：\n{search_result}"
+                    system_message.content += context_msg
+
+            # 初始化 Qwen 快速生成模型
+            llm = ChatOpenAI(
+                model="qwen-turbo",
+                api_key=settings.QWEN_API_KEY,
+                base_url=settings.QWEN_BASE_URL,
+                temperature=0.2,
+                streaming=True
+            )
+
+            # 流式生成并通过 SSE 发送
+            full_response_parts = []
+            async for chunk in llm.astream(messages_queue):
+                content = chunk.content
+                if content:
+                    full_response_parts.append(content)
+                    await sse.async_publish_chat_patch(task_id=task_id, patch=content)
+            full_response = "".join(full_response_parts)
+            logger.info(f"[{task_id}][qwen-turbo][执行: Direct RAG/Chitchat][结果: 长度 {len(full_response)} 字符]")
 
         # ── Step 4: 更新对话历史 + 结束信号 ───────────────────────────────────
         history_key = f"xiaoye:chat:{task_id}:history"
@@ -114,4 +178,4 @@ async def dispatch_chat_worker(
 
         await sse.async_publish_chat_patch(task_id=task_id, patch="\n\n---\n")
 
-        print(f"[ChatWorker] task={task_id} completed via Reasoning pipeline.")
+        print(f"[ChatWorker] task={task_id} completed via Routing pipeline.")

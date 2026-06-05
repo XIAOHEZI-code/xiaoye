@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -178,12 +178,39 @@ const MarkdownRenderer: React.FC<{
   onCitationClick?: (pageNumber: number, docId?: string, highlightText?: string) => void;
 }> = ({ content, className, onCitationClick }) => {
   const processed = preprocessLatex(content);
+  
+  // Custom transform to allow base64 data URIs
+  const customUrlTransform = (url: string) => {
+    if (url.startsWith('data:')) return url;
+    return defaultUrlTransform(url);
+  };
+
   return (
     <div className={className}>
       <ReactMarkdown
+        urlTransform={customUrlTransform}
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          // Render beautiful, scaled plotting images
+          img: ({ src, alt, ...props }) => (
+            <img
+              src={src}
+              alt={alt}
+              {...props}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '450px',
+                objectFit: 'contain',
+                borderRadius: '8px',
+                border: '1px solid var(--glass-border)',
+                marginTop: '12px',
+                marginBottom: '12px',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
+                display: 'block',
+              }}
+            />
+          ),
           // 拦截所有文本节点，将其中的 [来源: ...] 标注替换为可点击组件
           p: ({ children, ...props }) => (
             <p {...props}>

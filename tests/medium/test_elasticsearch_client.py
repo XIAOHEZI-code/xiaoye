@@ -19,7 +19,7 @@ def test_elasticsearch_connectivity():
         
         # 简单验证 exists API 不会报错
         exists = es.indices.exists(index=test_index)
-        assert exists is False, "新生成的随机索引不应该存在"
+        assert not exists, "新生成的随机索引不应该存在"
         
     except Exception as e:
         pytest.skip(f"无法连接到本地 Elasticsearch，跳过测试。详细错误: {e}")

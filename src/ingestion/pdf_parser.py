@@ -80,8 +80,11 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
             out_metadata = json.load(f)
 
     # Gather images
-    images = glob.glob(os.path.join(image_dir, "*.png")) + glob.glob(
-        os.path.join(image_dir, "*.webp")
+    images = (
+        glob.glob(os.path.join(image_dir, "*.png"))
+        + glob.glob(os.path.join(image_dir, "*.webp"))
+        + glob.glob(os.path.join(image_dir, "*.jpg"))
+        + glob.glob(os.path.join(image_dir, "*.jpeg"))
     )
     images = [os.path.abspath(img) for img in images]
 
