@@ -4,6 +4,7 @@ from langchain_openai import OpenAIEmbeddings
 from src.core.config import settings
 from typing import List, Dict
 
+
 class ElasticsearchIndexer:
     def __init__(self):
         self.es = Elasticsearch(settings.ELASTICSEARCH_URL)
@@ -31,29 +32,35 @@ class ElasticsearchIndexer:
                         "doc_id": {"type": "keyword"},
                         "chunk_id": {"type": "keyword"},
                         "content": {"type": "text", "analyzer": "ik_max_word"},
-                        "source_type": {"type": "keyword"},  # text_chunk | image_description
+                        "source_type": {
+                            "type": "keyword"
+                        },  # text_chunk | image_description
                         # === M1 新增：富媒体溯源字段 ===
-                        "source_pdf_id": {"type": "keyword"},   # 原始 PDF 文件标识
-                        "page_number": {"type": "integer"},     # 所在页码 (1-indexed)
-                        "bbox": {                               # PDF 页面上的矩形区域
+                        "source_pdf_id": {"type": "keyword"},  # 原始 PDF 文件标识
+                        "page_number": {"type": "integer"},  # 所在页码 (1-indexed)
+                        "bbox": {  # PDF 页面上的矩形区域
                             "type": "object",
                             "enabled": False,  # 不索引，仅存储用于前端渲染
                         },
-                        "image_uri": {"type": "keyword"},       # 图片/截图存储路径
-                        "chunk_type": {"type": "keyword"},      # text | table | figure | formula
+                        "image_uri": {"type": "keyword"},  # 图片/截图存储路径
+                        "chunk_type": {
+                            "type": "keyword"
+                        },  # text | table | figure | formula
                         # === 向量字段（不变） ===
                         "vector": {
                             "type": "dense_vector",
                             "dims": 1024,
                             "index": True,
-                            "similarity": "cosine"
-                        }
+                            "similarity": "cosine",
+                        },
                     }
                 }
             }
             self.es.indices.create(index=self.index_name, body=mapping, ignore=400)
 
-    def index_chunks(self, chunks: List[str], doc_id: str, source_type: str = "text_chunk"):
+    def index_chunks(
+        self, chunks: List[str], doc_id: str, source_type: str = "text_chunk"
+    ):
         """
         [旧接口 - 向后兼容] 索引纯文本 chunks 列表。
         新代码请使用 index_chunk_documents() 以获取富媒体溯源能力。
@@ -74,8 +81,8 @@ class ElasticsearchIndexer:
                     "chunk_id": f"chunk_{i}",
                     "content": chunk,
                     "source_type": source_type,
-                    "vector": vector
-                }
+                    "vector": vector,
+                },
             }
             actions.append(action)
 
@@ -106,21 +113,33 @@ class ElasticsearchIndexer:
         BATCH_SIZE = 10
         all_vectors = []
         for i in range(0, len(texts), BATCH_SIZE):
-            batch = texts[i:i + BATCH_SIZE]
+            batch = texts[i : i + BATCH_SIZE]
             vectors = self.embeddings.embed_documents(batch)
             all_vectors.extend(vectors)
             if len(texts) > BATCH_SIZE:
-                print(f"  Embedded batch {i//BATCH_SIZE + 1}/{(len(texts)-1)//BATCH_SIZE + 1}")
+                print(
+                    f"  Embedded batch {i // BATCH_SIZE + 1}/{(len(texts) - 1) // BATCH_SIZE + 1}"
+                )
 
         actions = []
         for chunk, vector in zip(valid_chunks, all_vectors):
             source = chunk.to_dict()
             source["vector"] = vector
-            actions.append({
-                "_index": self.index_name,
-                "_id": f"{chunk.doc_id}_{chunk.chunk_id}",
-                "_source": source,
-            })
+            actions.append(
+                {
+                    "_index": self.index_name,
+                    "_id": f"{chunk.doc_id}_{chunk.chunk_id}",
+                    "_source": source,
+                }
+            )
 
         print(f"Bulk indexing {len(actions)} rich chunks into Elasticsearch...")
         helpers.bulk(self.es, actions)
+
+    def count_chunks_by_doc(self, doc_id: str) -> int:
+        """查询指定doc_id在ES中的chunk数量。先refresh确保可见。"""
+        self.es.indices.refresh(index=self.index_name)
+        result = self.es.count(
+            index=self.index_name, body={"query": {"term": {"doc_id": doc_id}}}
+        )
+        return result["count"]

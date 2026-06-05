@@ -7,19 +7,27 @@
 
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-def build_system_prompt(deep_mode: bool, memory_context: str | None, vlm_context: str | None) -> SystemMessage:
+
+def build_system_prompt(
+    deep_mode: bool, memory_context: str | None, vlm_context: str | None
+) -> SystemMessage:
     """构建核心系统设定（System Prompt）"""
-    
+
     parts = []
-    
+
     # 1. 核心人设与工作模式
     if deep_mode:
         parts.append(
             "你是小冶，导师（用户）手下勤奋的冶金专业研究生。\n"
             "【深度模式已激活】：本次对话将启动高级知识图谱多步检索与推理。\n"
+            "**知识图谱优先**：你擅长先使用知识图谱检索分析问题，通过图谱中的实体关系扩大搜索面。"
+            "优先使用 search_metallurgy_graph_relations 了解知识分布——先图谱后文本，图谱帮你看到全景，文本检索帮你深入细节。\n"
             "**强制要求**：\n"
             "1. 查到资料后，务必直接给出具体数据，而不是文字堆砌。提取有价值的科研数据点进行有理有据的分析。\n"
-            "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置！严禁编造文献库中没有的数据。"
+            "2. 如果工具返回了图片Markdown格式信息（如 `![图表](http...)`），你必须原封不动地将其插入到回答中合适的位置！严禁编造文献库中没有的数据。\n"
+            "3. **交叉论证**：善于从不同文段中取证，同一个结论至少从两个不同来源交叉验证，交叉论证更有说服力。\n"
+            "4. **不得一次搜索就停止**：单次检索后至少换一个角度或关键词再验证一次，确保信息全面可靠后再给出回答。\n"
+            "5. **地域/领域专属文献**：对于涉及特定地区或领域的问题，确保检索并引用该地区/领域的专属论文，而非仅依赖泛提及该地区/领域的文献。"
         )
     else:
         parts.append(
@@ -53,6 +61,7 @@ from src.core.logger import setup_logger
 
 logger = setup_logger("xiaoye.context_builder")
 
+
 def estimate_tokens(text: str) -> int:
     """估算文本的 Token 数量 (使用 cl100k_base 统计算法)"""
     try:
@@ -61,7 +70,10 @@ def estimate_tokens(text: str) -> int:
     except Exception:
         return len(text) // 2
 
-async def build_and_compact_history(raw_history: list, token_budget: int = 6000) -> list:
+
+async def build_and_compact_history(
+    raw_history: list, token_budget: int = 6000
+) -> list:
     """
     将 Redis 中的原始历史转为 LangChain 结构化 Message，并引入 Token 预算折叠机制。
     当过往历史超出 Token 预算时，自动调用小模型对老旧历史进行摘要总结。
@@ -73,7 +85,7 @@ async def build_and_compact_history(raw_history: list, token_budget: int = 6000)
     messages = []
     current_tokens = 0
     retained_history = []
-    
+
     for h in reversed(raw_history):
         # 预估当前回合的 token (User + Assistant)
         turn_text = f"User: {h['user']}\nAssistant: {h['assistant']}"
@@ -82,21 +94,27 @@ async def build_and_compact_history(raw_history: list, token_budget: int = 6000)
         if current_tokens + turn_tokens > token_budget:
             # 达到阈值，不再装载原生的旧历史
             break
-            
+
         retained_history.insert(0, h)
         current_tokens += turn_tokens
 
     # 被丢弃的早期历史（可以送去压缩，这里为了极速响应，采用前端丢弃或简易折叠）
-    discarded_history = raw_history[:-len(retained_history)] if len(retained_history) < len(raw_history) else []
+    discarded_history = (
+        raw_history[: -len(retained_history)]
+        if len(retained_history) < len(raw_history)
+        else []
+    )
 
     if discarded_history:
-        logger.info(f"[Context Builder] History exceeded budget. Retained {len(retained_history)} turns, discarded/compacted {len(discarded_history)} turns.")
+        logger.info(
+            f"[Context Builder] History exceeded budget. Retained {len(retained_history)} turns, discarded/compacted {len(discarded_history)} turns."
+        )
         # 组装摘要说明，如果未来需要接入 LLM 摘要，可以在此处调用
         summary_text = f"【系统说明】：在之前的 {len(discarded_history)} 轮对话中，用户与你进行了深入探讨。受限于记忆窗口，这些早期对话已被折叠。"
         messages.append(SystemMessage(content=summary_text))
 
     for h in retained_history:
-        messages.append(HumanMessage(content=h['user']))
-        messages.append(AIMessage(content=h['assistant']))
-        
+        messages.append(HumanMessage(content=h["user"]))
+        messages.append(AIMessage(content=h["assistant"]))
+
     return messages

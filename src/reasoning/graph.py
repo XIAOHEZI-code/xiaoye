@@ -74,8 +74,17 @@ def create_worker_graph(deep_mode: bool = False):
     async def researcher_node(state: AgentState):
         """Single-task executor. Stop searching when you have enough — don't gold-plate."""
         # 提取真实的原始任务内容以备打印/记录和工具加载 (排除系统干预消息)
-        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
-        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        user_prompt_msg = next(
+            (
+                m
+                for m in reversed(state["messages"])
+                if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)
+            ),
+            None,
+        )
+        task_description = (
+            str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        )
         logger.info("[Researcher] Executing task: %s...", task_description[:50])
 
         # Extract injected system intervention from compactor, if any
@@ -88,6 +97,7 @@ def create_worker_graph(deep_mode: bool = False):
 
         # Get all deferred tool names to tell the LLM
         from src.tooling.search_engine import get_tool_search_engine
+
         engine = get_tool_search_engine()
         deferred_names = engine.get_deferred_tool_names()
         deferred_names_str = ", ".join(deferred_names)
@@ -104,10 +114,17 @@ def create_worker_graph(deep_mode: bool = False):
             f"   - 你当前只加载了核心工具。如果你需要使用以下延迟加载的专用工具，你**必须首先调用 `search_available_tools` 并传入 `select:工具名` (例如 `select:search_metallurgy_graph_relations`)** 来获取其完整定义和参数 Schema！\n"
             f"   - 可用的延迟加载工具包括：{deferred_names_str}\n"
             f"   - 只有在调用 `search_available_tools` 成功加载工具后，你才能在接下来的步骤中实际调用该工具。请不要在加载之前直接尝试调用它们！\n\n"
+            "【知识图谱优先策略】\n"
+            "   - 你擅长先使用知识图谱检索分析问题，通过图谱中的实体关系扩大搜索面。\n"
+            "   - 知识图谱可以帮助你发现相关实体和文档，请优先使用 search_metallurgy_graph_relations 了解知识分布，再根据图谱返回的实体关系锁定关键文献进行文本检索。\n"
+            "   - 先图谱后文本：图谱帮你'看到全景'，文本检索帮你'深入细节'。\n\n"
             "【检索纪律】\n"
             "1. 在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。\n"
             "2. 如果你发现上一次检索没有查到结果，**绝对不要**使用相同的关键词再次检索！请尝试更改为同义词、上位概念。\n"
-            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。"
+            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。\n"
+            "4. **交叉论证**：善于从不同文段中取证，同一个结论至少从两个不同来源交叉验证。不要只依赖单一文献的数据——交叉论证更有说服力。\n"
+            "5. **地域/领域专属文献**：对于涉及特定地区或领域的问题，确保检索并引用该地区/领域的专属论文，而非仅依赖泛提及该地区/领域的文献。\n"
+            "6. **不要一次搜索就停止**：单次检索获得结果后，至少再换一个角度或关键词验证一次，确保信息全面可靠后再给出回答。"
         )
 
         if feedback:
@@ -119,7 +136,11 @@ def create_worker_graph(deep_mode: bool = False):
         # Scan history for search_available_tools calls to dynamically load tools
         loaded_tool_names = set()
         for msg in state["messages"]:
-            if isinstance(msg, AIMessage) and hasattr(msg, "tool_calls") and msg.tool_calls:
+            if (
+                isinstance(msg, AIMessage)
+                and hasattr(msg, "tool_calls")
+                and msg.tool_calls
+            ):
                 for tc in msg.tool_calls:
                     if tc.get("name") == "search_available_tools":
                         query = tc.get("args", {}).get("query", "")
@@ -131,19 +152,23 @@ def create_worker_graph(deep_mode: bool = False):
 
         if loaded_tool_names:
             from src.tooling.registry import get_tool_registry
+
             registry = get_tool_registry()
             all_tools = registry.get_all_tools()
             tool_map = {t.name: t for t in all_tools}
-            
+
             # Keep original order and avoid duplicates
             relevant_tool_names = [t.name for t in relevant_tools]
             for name in loaded_tool_names:
                 if name in tool_map and name not in relevant_tool_names:
                     relevant_tools.append(tool_map[name])
                     relevant_tool_names.append(name)
-            
-            logger.info("[Researcher] Loaded dynamic tools: %s. Total active tools: %s", 
-                        list(loaded_tool_names), relevant_tool_names)
+
+            logger.info(
+                "[Researcher] Loaded dynamic tools: %s. Total active tools: %s",
+                list(loaded_tool_names),
+                relevant_tool_names,
+            )
 
         dynamic_llm = llm.bind_tools(relevant_tools)
 
@@ -283,8 +308,17 @@ def create_worker_graph(deep_mode: bool = False):
     async def synthesizer_node(state: AgentState):
         """Generate the final comprehensive answer using all collected tool outputs, WITHOUT any tool calls."""
         # 从历史消息中提取原始提问作为任务描述，避免取到中间产生的 ToolMessage
-        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
-        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        user_prompt_msg = next(
+            (
+                m
+                for m in reversed(state["messages"])
+                if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)
+            ),
+            None,
+        )
+        task_description = (
+            str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        )
 
         # Collect all tool outputs from the message history
         tool_outputs = []
@@ -304,7 +338,7 @@ def create_worker_graph(deep_mode: bool = False):
             "【长度与因果分析要求】：请生成详尽完整的回答（不少于500字），包含具体数据、分析逻辑、因果解释和真实来源标注。"
             "对于涉及机理分析的问题，请展开说明完整的因果链条。"
         )
-        
+
         # 将收集的工具资料作为最后一条 HumanMessage 给到合成器
         synthesis_prompt = (
             "以下是从资料库中检索到的相关资料:\n{}\n\n"
@@ -328,7 +362,11 @@ def create_worker_graph(deep_mode: bool = False):
                 continue
             filtered_messages.append(m)
 
-        msgs = [SystemMessage(content=system_prompt)] + filtered_messages + [HumanMessage(content=synthesis_prompt)]
+        msgs = (
+            [SystemMessage(content=system_prompt)]
+            + filtered_messages
+            + [HumanMessage(content=synthesis_prompt)]
+        )
         response = await llm_without_tools.ainvoke(msgs)
 
         return {
@@ -406,6 +444,7 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
     )
 
     from src.tooling.definitions import current_task_id
+
     token = current_task_id.set(task_id)
     try:
         async for event in graph.astream_events(
@@ -420,11 +459,14 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
                 # ── 分离思维链 (thinking) 与正文 (content) ──
                 # qwen-max 在 deep_mode 下会返回 chunk.thinking 字段
                 if hasattr(chunk, "thinking") and chunk.thinking:
-                    await sse.async_publish("reasoning", {
-                        "task_id": task_id,
-                        "type": "reasoning",
-                        "thinking": chunk.thinking,
-                    })
+                    await sse.async_publish(
+                        "reasoning",
+                        {
+                            "task_id": task_id,
+                            "type": "reasoning",
+                            "thinking": chunk.thinking,
+                        },
+                    )
 
                 if hasattr(chunk, "content") and chunk.content:
                     final_output += chunk.content
