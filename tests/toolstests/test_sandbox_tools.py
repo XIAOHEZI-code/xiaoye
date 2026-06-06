@@ -112,3 +112,39 @@ async def test_handle_sandbox_agent_success(mock_chat, mock_execute_python, mock
     assert any("有状态计算沙盒子智能体" in p for p in published_patches)
     assert any("正在沙盒中执行以下 Python 代码" in p for p in published_patches)
     assert any("Calculation success: 100" in p for p in published_patches)
+
+
+@pytest.mark.small
+@patch("src.tools.sandbox.jupyter_client.KernelManager")
+def test_sandbox_warning_filtering(mock_km_class):
+    from src.tools.sandbox import JupyterSandbox
+    import queue
+    mock_km = MagicMock()
+    mock_kc = MagicMock()
+    mock_km.client.return_value = mock_kc
+    mock_km_class.return_value = mock_km
+
+    # Mock execute return msg_id and raise Empty queue during init
+    mock_kc.execute.return_value = 'fake_msg_id'
+    mock_kc.get_iopub_msg.side_effect = queue.Empty()
+
+    sandbox = JupyterSandbox()
+    
+    # Configure mock for run_code call
+    mock_kc.execute.return_value = 'real_run_msg_id'
+    msg_warning = {
+        'parent_header': {'msg_id': 'real_run_msg_id'},
+        'header': {'msg_type': 'stream'},
+        'content': {'name': 'stderr', 'text': 'UserWarning: missing font glyphs\nReal error trace or output\n'}
+    }
+    msg_idle = {
+        'parent_header': {'msg_id': 'real_run_msg_id'},
+        'header': {'msg_type': 'status'},
+        'content': {'execution_state': 'idle'}
+    }
+    mock_kc.get_iopub_msg.side_effect = [msg_warning, msg_idle]
+
+    res = sandbox.run_code("dummy code")
+    
+    assert "UserWarning" not in res
+    assert "Real error trace or output" in res

@@ -29,9 +29,14 @@ class JupyterSandbox:
         self.kc.start_channels()
         self.kc.wait_for_ready(timeout=15)
         
-        # Pre-inject SciencePlots styling silently
-        logger.info("Pre-injecting SciencePlots styling into Kernel...")
+        # Pre-inject SciencePlots styling and ignore warnings silently
+        logger.info("Pre-injecting SciencePlots styling and warnings filter into Kernel...")
         pre_inject_code = (
+            "try:\n"
+            "    import warnings\n"
+            "    warnings.simplefilter('ignore')\n"
+            "except Exception:\n"
+            "    pass\n"
             "try:\n"
             "    import matplotlib.pyplot as plt\n"
             "    import scienceplots\n"
@@ -105,8 +110,22 @@ class JupyterSandbox:
 
             if msg_type == 'stream':
                 text = content['text']
-                output_chunks.append(text)
-                logger.info(f"[Kernel STDOUT/STDERR] {text.strip()}")
+                if content.get('name') == 'stderr':
+                    # Filter out warning lines (case-insensitive check for warning/UserWarning/missing glyphs)
+                    lines = text.splitlines()
+                    filtered_lines = []
+                    for line in lines:
+                        if "warning" in line.lower() or "missing from font" in line:
+                            logger.info(f"Filtered out warning line from stderr: {line}")
+                            continue
+                        filtered_lines.append(line)
+                    if filtered_lines:
+                        text = "\n".join(filtered_lines) + "\n"
+                        output_chunks.append(text)
+                        logger.info(f"[Kernel STDERR] {text.strip()}")
+                else:
+                    output_chunks.append(text)
+                    logger.info(f"[Kernel STDOUT] {text.strip()}")
 
             elif msg_type == 'error':
                 err = "\n".join(content['traceback'])
