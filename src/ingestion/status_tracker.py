@@ -8,7 +8,7 @@ Ingestion Status Tracker — 入库进度追踪与 SSE 推送
   {
     "type": "ingestion_progress",
     "doc_id": "xxx",
-    "stage": "parsing|chunking|figures|indexing|completed|failed",
+     "stage": "parsing|chunking|figures|indexing|graphing|verifying|verify_failed|completed|failed",
     "message": "描述文本"
   }
 """
@@ -18,13 +18,22 @@ from enum import Enum
 from typing import Optional
 
 
+import logging
+
+logger = logging.getLogger("xiaoye.ingestion.status_tracker")
+
+
 class IngestionStage(str, Enum):
     """入库管线阶段枚举"""
+
     STARTED = "started"
     PARSING = "parsing"
     CHUNKING = "chunking"
     FIGURES = "figures"
     INDEXING = "indexing"
+    GRAPHING = "graphing"  # 图谱抽取中
+    VERIFYING = "verifying"  # 一致性验证中
+    VERIFY_FAILED = "verify_failed"  # 验证失败
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -46,14 +55,21 @@ class StatusTracker:
         try:
             import redis as sync_redis
             from src.core.config import settings
+
             rc = sync_redis.from_url(settings.CELERY_BROKER_URL)
-            rc.publish("xiaoye_sse", json.dumps({
-                "type": "ingestion_progress",
-                "doc_id": self.doc_id,
-                "stage": stage.value,
-                "message": message,
-            }, ensure_ascii=False))
+            rc.publish(
+                "xiaoye_sse",
+                json.dumps(
+                    {
+                        "type": "ingestion_progress",
+                        "doc_id": self.doc_id,
+                        "stage": stage.value,
+                        "message": message,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
             rc.close()
         except Exception as e:
             # SSE 推送失败不阻断入库流程
-            print(f"[StatusTracker] SSE push failed (non-fatal): {e}")
+            logger.warning(f"SSE push failed (non-fatal): {e}", exc_info=True)

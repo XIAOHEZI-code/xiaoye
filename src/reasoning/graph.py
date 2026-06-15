@@ -74,8 +74,17 @@ def create_worker_graph(deep_mode: bool = False):
     async def researcher_node(state: AgentState):
         """Single-task executor. Stop searching when you have enough — don't gold-plate."""
         # 提取真实的原始任务内容以备打印/记录和工具加载 (排除系统干预消息)
-        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
-        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        user_prompt_msg = next(
+            (
+                m
+                for m in reversed(state["messages"])
+                if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)
+            ),
+            None,
+        )
+        task_description = (
+            str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        )
         logger.info("[Researcher] Executing task: %s...", task_description[:50])
 
         # Extract injected system intervention from compactor, if any
@@ -86,16 +95,36 @@ def create_worker_graph(deep_mode: bool = False):
             if isinstance(last, HumanMessage) and "[系统干预]" in str(last.content):
                 feedback = last.content
 
+        # Get all deferred tool names to tell the LLM
+        from src.tooling.search_engine import get_tool_search_engine
+
+        engine = get_tool_search_engine()
+        deferred_names = engine.get_deferred_tool_names()
+        deferred_names_str = ", ".join(deferred_names)
+
         sys_prompt = (
             "你是一名底层的检索探测 Worker。不要向用户对话，直接调用工具。\n"
-            "【自主决策原则】：你就是决定何时停止检索的人。如果已有足够资料回答，立即停止调用工具，直接给出答案。"
-            "宁可给出有据可查的不完整回答，也不要为了'完美匹配'反复搜索。"
-            "当资料库中没有直接答案时，坦诚说明，给出已知的最相关数据即可。"
-            "不要 Gold-Plate：一次检索命中主题相关内容即可，不需要穷举所有可能的搜索词。\n\n"
+            "【自主决策原则】：\n"
+            "   - 如果用户要求执行物理计算、性能分析或学术绘图任务：你**必须先调用 `search_metallurgy_text` 检索相关的冶金数据与性能参数**以验证真实数据点。获取真实且有据可查的数据后，再调用 `delegate_scientific_visualization` 委派后台子智能体进行绘图。切勿使用你大模型自身记忆中编造/猜测的数值进行绘图委派！\n"
+            "   - 如果检索未命中任何结果，方可使用学术界公认的近似数值，但必须在回答中说明‘未在数据库中查到该材料的具体数据，以下为参考公认值’，且**严禁捏造任何 `[来源: xxx.pdf]` 格式的假文献出处**！\n"
+            "   - 你就是决定何时停止检索的人。如果已有足够资料回答，立即停止调用工具，直接给出答案。宁可给出有据可查的不完整回答，也不要为了'完美匹配'反复搜索。不要 Gold-Plate。\n\n"
+            "【文献检索与词项匹配原则】\n"
+            "   - 当你进行文献检索时，如果查找抗拉强度或拉伸性能试验数据，请务必使用‘抗拉强度’、‘拉伸试验’、‘拉伸性能’等学术名词进行检索，而不是只搜‘拉伸疲劳’。推荐的 top_k 设置为 5 以免遗漏关键结果页面。\n\n"
+            "【动态工具加载机制】\n"
+            f"   - 你当前只加载了核心工具。如果你需要使用以下延迟加载的专用工具，你**必须首先调用 `search_available_tools` 并传入 `select:工具名` (例如 `select:search_metallurgy_graph_relations`)** 来获取其完整定义和参数 Schema！\n"
+            f"   - 可用的延迟加载工具包括：{deferred_names_str}\n"
+            f"   - 只有在调用 `search_available_tools` 成功加载工具后，你才能在接下来的步骤中实际调用该工具。请不要在加载之前直接尝试调用它们！\n\n"
+            "【知识图谱优先策略】\n"
+            "   - 你擅长先使用知识图谱检索分析问题，通过图谱中的实体关系扩大搜索面。\n"
+            "   - 知识图谱可以帮助你发现相关实体和文档，请优先使用 search_metallurgy_graph_relations 了解知识分布，再根据图谱返回的实体关系锁定关键文献进行文本检索。\n"
+            "   - 先图谱后文本：图谱帮你'看到全景'，文本检索帮你'深入细节'。\n\n"
             "【检索纪律】\n"
             "1. 在使用检索工具获得带有来源标注的内容时，你的最终总结必须带上来源坐标，例如 `[来源: xxx.pdf, p.12]`，用于前端富媒体跳链。\n"
             "2. 如果你发现上一次检索没有查到结果，**绝对不要**使用相同的关键词再次检索！请尝试更改为同义词、上位概念。\n"
-            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。"
+            "3. 同一工具不要连续调用超过 2 次。如果两次检索返回相似内容，立即停止搜索并给出答案。\n"
+            "4. **交叉论证**：善于从不同文段中取证，同一个结论至少从两个不同来源交叉验证。不要只依赖单一文献的数据——交叉论证更有说服力。\n"
+            "5. **地域/领域专属文献**：对于涉及特定地区或领域的问题，确保检索并引用该地区/领域的专属论文，而非仅依赖泛提及该地区/领域的文献。\n"
+            "6. **不要一次搜索就停止**：单次检索获得结果后，至少再换一个角度或关键词验证一次，确保信息全面可靠后再给出回答。"
         )
 
         if feedback:
@@ -103,6 +132,44 @@ def create_worker_graph(deep_mode: bool = False):
 
         # [M5] Probe environment to load only relevant tools
         relevant_tools = tool_loader.probe_environment(task_description)
+
+        # Scan history for search_available_tools calls to dynamically load tools
+        loaded_tool_names = set()
+        for msg in state["messages"]:
+            if (
+                isinstance(msg, AIMessage)
+                and hasattr(msg, "tool_calls")
+                and msg.tool_calls
+            ):
+                for tc in msg.tool_calls:
+                    if tc.get("name") == "search_available_tools":
+                        query = tc.get("args", {}).get("query", "")
+                        if query:
+                            # Run search to find which tools this query matches
+                            results = engine.search(query)
+                            for r in results:
+                                loaded_tool_names.add(r["name"])
+
+        if loaded_tool_names:
+            from src.tooling.registry import get_tool_registry
+
+            registry = get_tool_registry()
+            all_tools = registry.get_all_tools()
+            tool_map = {t.name: t for t in all_tools}
+
+            # Keep original order and avoid duplicates
+            relevant_tool_names = [t.name for t in relevant_tools]
+            for name in loaded_tool_names:
+                if name in tool_map and name not in relevant_tool_names:
+                    relevant_tools.append(tool_map[name])
+                    relevant_tool_names.append(name)
+
+            logger.info(
+                "[Researcher] Loaded dynamic tools: %s. Total active tools: %s",
+                list(loaded_tool_names),
+                relevant_tool_names,
+            )
+
         dynamic_llm = llm.bind_tools(relevant_tools)
 
         # 把 researcher 特有指令插在 messages 队列的最前面
@@ -241,8 +308,17 @@ def create_worker_graph(deep_mode: bool = False):
     async def synthesizer_node(state: AgentState):
         """Generate the final comprehensive answer using all collected tool outputs, WITHOUT any tool calls."""
         # 从历史消息中提取原始提问作为任务描述，避免取到中间产生的 ToolMessage
-        user_prompt_msg = next((m for m in reversed(state["messages"]) if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)), None)
-        task_description = str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        user_prompt_msg = next(
+            (
+                m
+                for m in reversed(state["messages"])
+                if isinstance(m, HumanMessage) and "[系统干预]" not in str(m.content)
+            ),
+            None,
+        )
+        task_description = (
+            str(user_prompt_msg.content) if user_prompt_msg else "Unknown task"
+        )
 
         # Collect all tool outputs from the message history
         tool_outputs = []
@@ -253,13 +329,16 @@ def create_worker_graph(deep_mode: bool = False):
         collected = "\n\n---\n\n".join(tool_outputs) if tool_outputs else "无检索资料"
 
         system_prompt = (
-            "你是一名冶金领域的研究生。请结合之前的对话历史和刚才检索到的资料，生成最终的综合回答。绝对不要调用任何工具。\n"
-            "【强制要求】你的回答中必须标注信息来源，格式为：[来源: 文件名, p.页码]。"
-            "引用具体数据时必须注明来源出处。\n"
-            "【长度要求】请生成详尽完整的回答（不少于500字），包含具体数据、分析逻辑、因果解释和来源标注。"
+            "你是一名严谨的冶金领域研究生。请结合之前的对话历史和刚才检索到的资料，生成最终的综合回答。绝对不要调用任何工具。\n"
+            "【图片展示原则】：\n"
+            "   - 如果在当前对话步骤中，由于绘图委派成功，已经由子智能体（sandbox_agent）完成了后台画图，那么你**绝对不要**在你的答复文本中编造、猜测或生成任何 markdown 格式的图片标签 `![]()`！因为子智能体会单独渲染它的图片，你无需进行图片标签展位。\n"
+            "【文献引用纪律】：\n"
+            "   - 你必须只在引用**真实检索到的参考资料**中的具体数据时，才标注 `[来源: 文件名, p.页码]`。\n"
+            "   - 如果你没有通过工具检索到对应的文献，或者回答的内容完全来自于学术公认常识（而非检索文献），你**绝对不能**使用 `[来源: xxx]` 格式进行出处标记，更不能捏造不存在的文献文件名与页码。\n"
+            "【长度与因果分析要求】：请生成详尽完整的回答（不少于500字），包含具体数据、分析逻辑、因果解释和真实来源标注。"
             "对于涉及机理分析的问题，请展开说明完整的因果链条。"
         )
-        
+
         # 将收集的工具资料作为最后一条 HumanMessage 给到合成器
         synthesis_prompt = (
             "以下是从资料库中检索到的相关资料:\n{}\n\n"
@@ -283,7 +362,11 @@ def create_worker_graph(deep_mode: bool = False):
                 continue
             filtered_messages.append(m)
 
-        msgs = [SystemMessage(content=system_prompt)] + filtered_messages + [HumanMessage(content=synthesis_prompt)]
+        msgs = (
+            [SystemMessage(content=system_prompt)]
+            + filtered_messages
+            + [HumanMessage(content=synthesis_prompt)]
+        )
         response = await llm_without_tools.ainvoke(msgs)
 
         return {
@@ -360,6 +443,9 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
         "Starting Worker Pipeline for task_id: %s (deep_mode=%s)", task_id, deep_mode
     )
 
+    from src.tooling.definitions import current_task_id
+
+    token = current_task_id.set(task_id)
     try:
         async for event in graph.astream_events(
             state, version="v2", config={"recursion_limit": 50}
@@ -373,11 +459,14 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
                 # ── 分离思维链 (thinking) 与正文 (content) ──
                 # qwen-max 在 deep_mode 下会返回 chunk.thinking 字段
                 if hasattr(chunk, "thinking") and chunk.thinking:
-                    await sse.async_publish("reasoning", {
-                        "task_id": task_id,
-                        "type": "reasoning",
-                        "thinking": chunk.thinking,
-                    })
+                    await sse.async_publish(
+                        "reasoning",
+                        {
+                            "task_id": task_id,
+                            "type": "reasoning",
+                            "thinking": chunk.thinking,
+                        },
+                    )
 
                 if hasattr(chunk, "content") and chunk.content:
                     final_output += chunk.content
@@ -412,3 +501,5 @@ async def run_worker_pipeline(payload: dict, task_id: str) -> str:
             task_id, "\n\n> ❌ **管线执行异常**: {}\n".format(e)
         )
         return "[Worker Error] {}".format(e)
+    finally:
+        current_task_id.reset(token)

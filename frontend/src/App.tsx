@@ -244,12 +244,23 @@ function App() {
           return;
         }
 
-        // Fork VLM: 选区截图推送
-        if (data.type === 'fork_start' && data.image_url) {
-          const imgUrl = data.image_url.startsWith('/')
-            ? `${BASE_URL}${data.image_url}`
-            : data.image_url;
-          setNotebookContent(prev => prev + `\n\n---\n![📷 选区截图](${imgUrl})\n`);
+        // Fork VLM/Sandbox: Subagent start event
+        if (data.type === 'fork_start') {
+          setActiveTasks(prev => {
+            if (prev.some(t => t.task_id === data.task_id)) return prev;
+            return [...prev, {
+              task_id: data.task_id,
+              id: data.task_id,
+              type: data.task_type || "sandbox_agent",
+              timestamp: Date.now()
+            }];
+          });
+          if (data.image_url) {
+            const imgUrl = data.image_url.startsWith('/')
+              ? `${BASE_URL}${data.image_url}`
+              : data.image_url;
+            setNotebookContent(prev => prev + `\n\n---\n![📷 选区截图](${imgUrl})\n`);
+          }
           return;
         }
 

@@ -548,66 +548,15 @@ async def test_graph_search(
 # ═══════════════════════════════════════════════════════════════════════════════
 # Layer 3: KG-HyDE Enhanced Search
 # ═══════════════════════════════════════════════════════════════════════════════
-
-
 async def test_hyde_search(query: str, top_k: int = 5) -> dict:
-    """Execute KG-anchored HyDE pipeline via HyDESearcher.
-
-    Runs the full HyDE pipeline (entity extraction → KG traversal →
-    HyDE generation → semantic search) as a single atomic operation
-    with the full layer timeout.  Sub-step timeouts are avoided because
-    the LLM generation step can take 30–60 s.
-
-    Entity extraction for reporting is done via fast keyword matching;
-    the production HyDE LLM extraction is exercised inside searcher.search().
-
-    Args:
-        query: Natural language query string.
-        top_k: Number of final results to retrieve.
-
-    Returns:
-        Dict with keys: entities, hyde_preview, hits, chunks, time_ms, error.
-    """
-    from src.retrieval.hyde_searcher import HyDESearcher
-
-    result: dict = {
+    return {
         "entities": [],
-        "hyde_preview": "",
+        "hyde_preview": "KG-HyDE has been deprecated in favor of Agent-native multi-hop search.",
         "hits": 0,
         "chunks": [],
         "time_ms": 0,
-        "error": None,
+        "error": "KG-HyDE deprecated",
     }
-
-    t0 = time.monotonic()
-    try:
-        searcher = HyDESearcher()
-
-        # Run full HyDE pipeline (entity → KG → generate → search)
-        # with the single layer-level timeout — no sub-step slicing
-        chunks = await asyncio.wait_for(
-            asyncio.to_thread(searcher.search, query, top_k),
-            timeout=LAYER_TIMEOUTS["hyde_search"],
-        )
-        result["time_ms"] = _elapsed_ms(t0)
-        result["chunks"] = [_chunk_doc_to_dict(c) for c in chunks]
-        result["hits"] = len(chunks)
-
-        # Entities for reporting: use fast keyword extraction
-        # (production LLM extraction already ran inside searcher.search())
-        result["entities"] = extract_entities_keyword(query)
-
-    except asyncio.TimeoutError:
-        result["error"] = (
-            f"HyDE search timed out after {LAYER_TIMEOUTS['hyde_search']}s"
-        )
-        result["time_ms"] = _elapsed_ms(t0)
-    except Exception as exc:
-        result["error"] = f"{type(exc).__name__}: {exc}"
-        result["time_ms"] = _elapsed_ms(t0)
-
-    return result
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Layer 4: Full Chat Pipeline (Researcher → Tools → Compactor → Evaluator loop)

@@ -11,7 +11,10 @@ import os
 
 import redis.asyncio as redis
 from src.core.config import settings
+from src.core.logger import setup_logger
+from src.tooling.definitions import execute_metallurgy_python
 
+logger = setup_logger("xiaoye.fork")
 redis_client = redis.from_url(settings.CELERY_BROKER_URL)
 
 # ---------------------------------------------------------------------------
@@ -298,9 +301,186 @@ async def _handle_deep_research(task_id: str, img_b64: str):
     )
 
     from src.reasoning.graph import run_worker_pipeline
+    from langchain_core.messages import HumanMessage
 
-    payload = {"task_description": task_description, "deep_mode": True}
+    payload = {
+        "messages": [HumanMessage(content=task_description)],
+        "deep_mode": True
+    }
     await run_worker_pipeline(payload, task_id)
+
+
+# ---------------------------------------------------------------------------
+# Sandbox Subagent Handling (Mode 3)
+# ---------------------------------------------------------------------------
+
+SYSTEM_SANDBOX_AGENT = (
+    "你是小冶，一个专业的冶金学计算与科学绘图助手。\n"
+    "你的任务是根据用户的需求，生成高质量的 Python 代码来执行冶金学计算、热力学相图模拟或 Matplotlib 绘图，从而回答用户的问题。\n"
+    "【重要规范】：\n"
+    "1. 绘图必须使用 `matplotlib.pyplot`，并强制使用 `scienceplots` 的学术风格。代码的最开始必须包含：\n"
+    "   ```python\n"
+    "   import matplotlib.pyplot as plt\n"
+    "   import scienceplots\n"
+    "   plt.style.use(['science', 'no-latex'])\n"
+    "   ```\n"
+    "2. 保证图表标签、图例、字体大小适中，且完全是中文或英文学术标签（必须包含单位，如 'Temperature (°C)', 'Tensile Strength (MPa)' 等）。\n"
+    "3. 色彩必须搭配美观高雅，不要使用原色（红、绿、蓝），请使用柔和的学术渐变色或 HSL tailormade 配色。\n"
+    "4. 你的输出必须有且仅有一个 Python 代码块，格式如下：\n"
+    "   ```python\n"
+    "   # 你的 Python 代码\n"
+    "   ```\n"
+    "   请勿添加任何多余的解释文字，只返回该代码块。"
+)
+
+
+async def _handle_sandbox_agent(task_id: str, instruction: str):
+    """Mode 3 — sandbox_agent — Async calculation & SciencePlots visualization subagent."""
+    from langchain_openai import ChatOpenAI
+    from langchain_core.messages import HumanMessage, SystemMessage
+    import asyncio
+
+    # ── Step A: Publish start status ──
+    await redis_client.publish(
+        "xiaoye_sse",
+        json.dumps(
+            {
+                "task_id": task_id,
+                "patch": (
+                    "\n> ⚙️ **有状态计算沙盒子智能体** — 正在设计计算逻辑与学术配图...\n\n"
+                ),
+            }
+        ),
+    )
+
+    llm = ChatOpenAI(
+        model="qwen-max",
+        streaming=False,
+        max_retries=2,
+        api_key=settings.QWEN_API_KEY,
+        base_url=settings.QWEN_BASE_URL,
+    )
+
+    messages = [
+        SystemMessage(content=SYSTEM_SANDBOX_AGENT),
+        HumanMessage(content=f"用户指令：{instruction}\n\n请直接生成执行此任务的 Python 代码块。")
+    ]
+
+    logger.info(f"[{task_id}][qwen-max][执行: sandbox_agent 代码生成][输入: {instruction[:50]}...]")
+    try:
+        response = await llm.ainvoke(messages)
+        code_resp = response.content.strip()
+    except Exception as e:
+        logger.error(f"[{task_id}][qwen-max][执行: sandbox_agent 代码生成][异常: {e}]")
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "patch": f"\n\n**Error [LLM Generation Failed]:** {e}\n"
+                }
+            ),
+        )
+        return
+
+    # Extract python code block
+    code = ""
+    if "```python" in code_resp:
+        code = code_resp.split("```python")[1].split("```")[0].strip()
+    elif "```" in code_resp:
+        code = code_resp.split("```")[1].split("```")[0].strip()
+    else:
+        code = code_resp
+
+    if not code:
+        logger.warning(f"[{task_id}][qwen-max][执行: sandbox_agent 代码生成][异常: 生成代码为空]")
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "patch": "\n\n**Error:** LLM 生成的代码为空。\n"
+                }
+            ),
+        )
+        return
+    logger.info(f"[{task_id}][qwen-max][执行: sandbox_agent 代码生成][结果: 代码长度 {len(code)} 字节]")
+
+    # Ensure pre_inject style is there
+    preamble = (
+        "import matplotlib.pyplot as plt\n"
+        "import scienceplots\n"
+        "plt.style.use(['science', 'no-latex'])\n\n"
+    )
+    if "plt.style.use" not in code:
+        full_code = preamble + code
+    else:
+        full_code = code
+
+    # Publish the code to SSE
+    await redis_client.publish(
+        "xiaoye_sse",
+        json.dumps(
+            {
+                "task_id": task_id,
+                "patch": (
+                    f"**正在沙盒中执行以下 Python 代码进行物理计算与绘图：**\n```python\n{full_code}\n```\n\n"
+                    "> 🚀 **执行中...**\n"
+                ),
+            }
+        ),
+    )
+
+    logger.info(f"[{task_id}][python-sandbox][执行: sandbox 代码运行][代码: {full_code[:100].replace('\n', ' ')}...]")
+    try:
+        # Run code in thread pool to avoid blocking the main event loop
+        result = await asyncio.to_thread(execute_metallurgy_python, full_code)
+
+        logger.info(f"[{task_id}][python-sandbox][执行: sandbox 代码运行][结果: {result[:100].replace('\n', ' ')}...]")
+        
+        # Clean user-facing output from system image logs
+        clean_result = "\n".join([line for line in result.split("\n") if "[System: Sighted an Image" not in line])
+        
+        # Publish completion output to SSE
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "patch": f"\n\n**运行结果输出：**\n\n{clean_result}\n"
+                }
+            ),
+        )
+        # Store full execution text in Redis chat memory
+        await redis_client.set(f"xiaoye:chat:{task_id}", result)
+
+        # Append subagent clean result to parent session history in Redis
+        parent_session_id = task_id.replace("sub_", "")
+        parent_history_key = f"xiaoye:chat:{parent_session_id}:history"
+        try:
+            raw_history = await redis_client.get(parent_history_key)
+            if raw_history:
+                history = json.loads(raw_history)
+                if history and isinstance(history, list):
+                    last_turn = history[-1]
+                    if "assistant" in last_turn:
+                        last_turn["assistant"] += f"\n\n**运行结果输出：**\n\n{clean_result}"
+                        await redis_client.set(parent_history_key, json.dumps(history, ensure_ascii=False))
+                        logger.info(f"Successfully persisted subagent output to parent session history: {parent_history_key}")
+        except Exception as persist_err:
+            logger.error(f"Failed to persist subagent output to parent session history: {persist_err}")
+
+    except Exception as e:
+        logger.error(f"[{task_id}][python-sandbox][执行: sandbox 代码运行][异常: {e}]")
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "task_id": task_id,
+                    "patch": f"\n\n**Error [Sandbox Execution Failed]:** {e}\n"
+                }
+            ),
+        )
 
 
 # ===================================================================
@@ -309,23 +489,21 @@ async def _handle_deep_research(task_id: str, img_b64: str):
 
 
 async def dispatch_fork_subagent(
-    task_id: str, task_type: str, bbox: dict, document_id: str
+    task_id: str,
+    task_type: str,
+    bbox: dict | None = None,
+    document_id: str | None = None,
+    instruction: str | None = None,
 ):
     """Dual-mode subagent fork engine.
 
-    Routes to ``_handle_analyze_region`` or ``_handle_deep_research`` based on
-    *task_type*, after common setup: document lookup, API-key guard, PDF cropping,
-    image persistence, and fork-start SSE broadcast.
+    Routes to ``_handle_analyze_region``, ``_handle_deep_research`` or ``_handle_sandbox_agent``
+    based on *task_type*. Bypasses PDF lookup and crop steps for sandbox_agent.
     """
     print(
         f"[ForkSubagent] Awakening for task {task_id}. "
-        f"Document: {document_id}, BBox: {bbox}, Type: {task_type}"
+        f"Document: {document_id}, BBox: {bbox}, Type: {task_type}, Instruction: {instruction}"
     )
-
-    # ---- Guard: document lookup ----
-    _doc, pdf_path = await _lookup_document(document_id, task_id)
-    if pdf_path is None:
-        return
 
     # ---- Guard: API key ----
     if not settings.QWEN_API_KEY:
@@ -344,6 +522,30 @@ async def dispatch_fork_subagent(
         return
 
     _setup_llm_environment()
+
+    # ---- Route sandbox_agent immediately ----
+    if task_type == "sandbox_agent":
+        await redis_client.publish(
+            "xiaoye_sse",
+            json.dumps(
+                {
+                    "type": "fork_start",
+                    "task_id": task_id,
+                    "patch": "\n> 🧪 **计算沙盒子智能体已启动**\n",
+                }
+            ),
+        )
+        await _handle_sandbox_agent(task_id, instruction)
+        await redis_client.publish(
+            "xiaoye_sse", json.dumps({"task_id": task_id, "patch": "\n\n---\n"})
+        )
+        print(f"[ForkSubagent] Task {task_id} gracefully completed and unmounted.")
+        return
+
+    # ---- Guard: document lookup ----
+    _doc, pdf_path = await _lookup_document(document_id, task_id)
+    if pdf_path is None:
+        return
 
     # ---- Crop image from PDF ----
     from src.tools.pdf_cropper import crop_pdf_to_base64_png

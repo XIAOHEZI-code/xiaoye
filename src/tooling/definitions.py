@@ -2,21 +2,26 @@
 # [M5 迁移] 从 src/agent/tools.py 迁移至 src/tooling/definitions.py
 # 单一职责：定义所有 LangChain Tool + 注册到 ToolSearchEngine + 提供动态装载接口
 
+from contextvars import ContextVar
 from pydantic import BaseModel, Field
 from src.retrieval.semantic_search import SemanticSearchTool
 from src.retrieval.graph_search import GraphLogicTool
-from src.retrieval.hyde_searcher import HyDESearcher
 from src.tools.sandbox import get_sandbox
 from src.tools.pdf_cropper import crop_pdf_to_base64_png
 from src.ingestion.image_analyzer import analyze_metallurgy_image_with_context, ImageEvaluationResult
 from src.tooling.search_engine import ToolMetadata, get_tool_search_engine
+from src.core.logger import setup_logger
 import json
 import os
 from langchain_core.tools import StructuredTool
 
+logger = setup_logger("xiaoye.tooling")
+
 semantic_searcher = SemanticSearchTool()
 graph_searcher = GraphLogicTool()
-hyde_searcher = HyDESearcher()
+
+# 全局 ContextVar 用于追踪当前任务的 task_id，供委派子智能体使用
+current_task_id: ContextVar[str] = ContextVar("current_task_id", default="")
 
 
 # =============================================================
@@ -25,7 +30,7 @@ hyde_searcher = HyDESearcher()
 
 class SearchTextInput(BaseModel):
     query: str = Field(description="Search query text for metallurgy documents")
-    top_k: int = Field(default=3, description="Number of results to return")
+    top_k: int = Field(default=5, description="Number of results to return")
 
 
 class GraphRelationsInput(BaseModel):
@@ -38,6 +43,10 @@ class ImpactPathInput(BaseModel):
 
 class PythonCodeInput(BaseModel):
     code: str = Field(description="Python code to execute in sandbox")
+
+
+class ScientificVisualizationInput(BaseModel):
+    instruction: str = Field(description="The natural language instructions outlining calculations or plot requirements.")
 
 
 class SearchToolsInput(BaseModel):
@@ -71,6 +80,7 @@ def execute_metallurgy_python(code: str) -> str:
     使用场景：进行极高精度的热力学计算、流体模拟、Numpy数值推演，或是画图与相图(PyCalphad)计算等。
     重要提示：环境中的变量具有生命周期，在第一轮定义的变量可以在以后的调用中继续使用！如果生成图表，会自动拦截并返回Base64。
     """
+    logger.info(f"[Tool:execute_metallurgy_python] Invoked with code length={len(code)}")
     sandbox = get_sandbox()
     result = sandbox.run_code(code)
 
@@ -85,10 +95,57 @@ def execute_metallurgy_python(code: str) -> str:
                 "content": result,
             }, ensure_ascii=False))
             rc.close()
+            logger.info("[Tool:execute_metallurgy_python] Successfully pushed sandbox image to Redis SSE.")
         except Exception as e:
-            print(f"[Tool:execute_metallurgy_python] SSE push failed (non-fatal): {e}")
+            logger.error(f"[Tool:execute_metallurgy_python] SSE push failed: {e}")
 
+    logger.info(f"[Tool:execute_metallurgy_python] Completed. Result size={len(result)} chars.")
     return result
+
+
+def delegate_scientific_visualization(instruction: str) -> str:
+    """
+    将复杂的冶金学物理计算、热力学相图模拟或学术级 Matplotlib 绘图任务委派给后台有状态代码沙盒执行子智能体（sandbox_agent）。
+    使用场景：
+    1. 当需要执行吉布斯自由能计算、相图模拟计算等热力学数值计算时；
+    2. 当需要绘制科学曲线图、组织表征或性能变化对比图时。
+    子智能体会异步在后台运行，并将最终计算数据和符合 SciencePlots 学术出版风格的图表推送到前端 Notebook 渲染。
+    本工具为非阻塞式设计，调用后即可向用户报告委派状态，结果会自动输出。
+    """
+    logger.info(f"[Tool:delegate_scientific_visualization] Invoked with instruction: {instruction}")
+    task_id = current_task_id.get()
+    if not task_id:
+        logger.warning("[Tool:delegate_scientific_visualization] current_task_id is not set. Using temporary task ID.")
+        task_id = "temp_task"
+    
+    sub_task_id = f"sub_{task_id}"
+    
+    import asyncio
+    from src.delivery.fork_worker import dispatch_fork_subagent
+    
+    try:
+        # Check if there is an active event loop
+        loop = asyncio.get_running_loop()
+        loop.create_task(dispatch_fork_subagent(
+            task_id=sub_task_id,
+            task_type="sandbox_agent",
+            instruction=instruction
+        ))
+        logger.info(f"[Tool:delegate_scientific_visualization] Successfully spawned async background task: {sub_task_id}")
+    except RuntimeError:
+        # Fallback to starting a daemon thread if no running event loop
+        logger.warning("[Tool:delegate_scientific_visualization] No running event loop. Spawning daemon thread.")
+        def run_async():
+            asyncio.run(dispatch_fork_subagent(
+                task_id=sub_task_id,
+                task_type="sandbox_agent",
+                instruction=instruction
+            ))
+        import threading
+        threading.Thread(target=run_async, daemon=True).start()
+
+    return f"【后台委派成功】：科学计算与绘图任务已委派给有状态沙盒计算子智能体（任务ID: {sub_task_id}）。计算结果与 SciencePlots 风格学术图表将在后台计算完成后自动发布并渲染在 Notebook 中，请您留意。"
+
 
 
 def crop_pdf_region(document_id: str, page_number: int, x0: float, y0: float, x1: float, y1: float) -> str:
@@ -97,6 +154,7 @@ def crop_pdf_region(document_id: str, page_number: int, x0: float, y0: float, x1
     使用场景：当你需要分析论文中的某个图表、公式或微观组织照片时，先裁切再发送给 image_analyzer。
     坐标使用相对比例 (0.0~1.0)，(x0,y0) 为左上角，(x1,y1) 为右下角。
     """
+    logger.info(f"[Tool:crop_pdf_region] Invoked for doc={document_id}, page={page_number}, bbox=({x0},{y0})-({x1},{y1})")
     from src.core.config import settings as _settings
     # 根据 document_id 找到实际 PDF 路径
     pdf_path = os.path.join(_settings.UPLOAD_DIR, f"{document_id}.pdf")
@@ -106,13 +164,16 @@ def crop_pdf_region(document_id: str, page_number: int, x0: float, y0: float, x1
         if os.path.exists(alt_path):
             pdf_path = alt_path
         else:
+            logger.error(f"[Tool:crop_pdf_region] PDF file not found for document_id={document_id}")
             return f"Error: PDF file not found for document_id={document_id}"
 
     relative_bbox = {"x0": x0, "y0": y0, "x1": x1, "y1": y1}
     try:
         b64_png = crop_pdf_to_base64_png(pdf_path, page_number, relative_bbox)
+        logger.info(f"[Tool:crop_pdf_region] Successfully cropped page {page_number}. PNG length={len(b64_png)}")
         return f"Successfully cropped page {page_number} region ({x0:.2f},{y0:.2f})-({x1:.2f},{y1:.2f}). Base64 PNG length: {len(b64_png)} chars. Use image_analyzer tool to analyze this image.\n\n[CROPPED_IMAGE_BASE64]:{b64_png[:200]}..."
     except Exception as e:
+        logger.error(f"[Tool:crop_pdf_region] Error cropping PDF: {e}")
         return f"Error cropping PDF: {e}"
 
 
@@ -123,27 +184,32 @@ def analyze_metallurgy_image(image_base64: str, caption: str = "", context_above
     传入图片的 Base64 编码，可选传入图注和上下文文字以提升分析精度。
     返回结构化的分类、描述和关键指标。
     """
+    logger.info(f"[Tool:analyze_metallurgy_image] Invoked with caption='{caption}', img_len={len(image_base64)}")
     result: ImageEvaluationResult = analyze_metallurgy_image_with_context(
         image_base64=image_base64,
         caption=caption or None,
         context_above=context_above or None,
         context_below=context_below or None,
     )
-    return json.dumps({
+    resp = json.dumps({
         "category": result.category,
         "sub_category": result.sub_category,
         "description": result.description,
         "key_metrics": result.key_metrics,
     }, ensure_ascii=False, indent=2)
+    logger.info(f"[Tool:analyze_metallurgy_image] VLM classification: category={result.category}, metrics={result.key_metrics}")
+    return resp
 
 
-def search_metallurgy_text(query: str, top_k: int = 3) -> str:
+def search_metallurgy_text(query: str, top_k: int = 5) -> str:
     """
     Search for chunked texts, standards, and image descriptions in the overarching metallurgy database.
     Use this when you need standard definitions, abstract concepts, or to look up physical properties.
     """
+    logger.info(f"[Tool:search_metallurgy_text] Invoked with query='{query}', top_k={top_k}")
     results = semantic_searcher.search(query, top_k=top_k)
     if not results:
+        logger.info("[Tool:search_metallurgy_text] No relevant text documents found.")
         return "No relevant text documents found."
     
     formatted = []
@@ -183,58 +249,11 @@ def search_metallurgy_text(query: str, top_k: int = 3) -> str:
             "sources": list(source_map.values()),
         }, ensure_ascii=False))
         rc.close()
+        logger.info(f"[Tool:search_metallurgy_text] Successfully pushed {len(source_map)} sources to Redis SSE.")
     except Exception as e:
-        print(f"[Tool:search_metallurgy_text] Failed to push retrieval sources (non-fatal): {e}")
+        logger.error(f"[Tool:search_metallurgy_text] Failed to push retrieval sources: {e}")
 
-    return "\n\n---\n\n".join(formatted)
-
-def search_metallurgy_kg_enhanced(query: str, top_k: int = 3) -> str:
-    """
-    Search for metallurgy documents using KG-Anchored HyDE.
-    This generates a hypothetical document anchored in the knowledge graph to perform a much more accurate semantic search.
-    """
-    results = hyde_searcher.search(query, top_k=top_k)
-    if not results:
-        return "No relevant text documents found."
-    
-    formatted = []
-    for r in results:
-        citation = r.to_citation_str()
-        content = f"Doc: {r.doc_id} {citation} (Type: {r.source_type})\nContent: {r.text_content}"
-        if r.image_uri:
-            import urllib.parse
-            encoded_path = urllib.parse.quote(r.image_uri)
-            image_md = f"![{r.source_type}图表](http://127.0.0.1:8000/api/v1/images?path={encoded_path})"
-            content += f"\nImage: {image_md}"
-        formatted.append(content)
-
-    # Push to SSE (similar to search_metallurgy_text)
-    try:
-        import redis as sync_redis
-        from src.core.config import settings as _settings
-
-        source_map = {}
-        for r in results:
-            if r.doc_id not in source_map:
-                source_map[r.doc_id] = {
-                    "doc_id": r.doc_id,
-                    "filename": r.source_pdf_id or r.doc_id,
-                    "pages": [],
-                    "score": r.score or 0,
-                    "chunk_type": r.chunk_type,
-                }
-            if r.page_number > 0 and r.page_number not in source_map[r.doc_id]["pages"]:
-                source_map[r.doc_id]["pages"].append(r.page_number)
-
-        rc = sync_redis.from_url(_settings.CELERY_BROKER_URL)
-        rc.publish("xiaoye_sse", json.dumps({
-            "type": "retrieval_sources",
-            "sources": list(source_map.values()),
-        }, ensure_ascii=False))
-        rc.close()
-    except Exception as e:
-        print(f"[Tool:search_metallurgy_kg_enhanced] Failed to push retrieval sources (non-fatal): {e}")
-
+    logger.info(f"[Tool:search_metallurgy_text] Completed. Found {len(results)} chunks.")
     return "\n\n---\n\n".join(formatted)
 
 
@@ -243,14 +262,22 @@ def search_metallurgy_graph_relations(entity: str) -> str:
     Search the Knowledge Graph to find direct relationships (1-hop) connected to a specific Metallurgy Entity.
     Use this when you want to know what impacts a property, or what process a material goes through.
     """
+    logger.info(f"[Tool:search_metallurgy_graph_relations] Invoked for entity='{entity}'")
     results = graph_searcher.find_direct_relations(entity)
     if not results:
+        logger.info(f"[Tool:search_metallurgy_graph_relations] No graph relations found for entity: {entity}")
         return f"No graph relations found for entity: {entity}"
         
     formatted = [f"Found {len(results)} relations:"]
     for r in results:
-        formatted.append(f"({r['subject']}) -[{r['relation']}]-> ({r['object']}) [Source: {r['source_doc']}]")
+        desc = f"({r['subject']}) -[{r['relation']}]-> ({r['object']}) [Source: {r['source_doc']}]"
+        if r.get('mechanism'):
+            desc += f"\n  - Mechanism: {r['mechanism']}"
+        if r.get('context'):
+            desc += f"\n  - Context: {r['context']}"
+        formatted.append(desc)
         
+    logger.info(f"[Tool:search_metallurgy_graph_relations] Completed. Found {len(results)} relations.")
     return "\n".join(formatted)
 
 
@@ -259,8 +286,10 @@ def trace_metallurgy_impact_path(entity: str) -> str:
     Trace the multi-hop causal impact path of a specific Metallurgy Entity (up to 3 hops).
     Use this to see ripple effects, e.g., how a specific defect or process cascades into final properties.
     """
+    logger.info(f"[Tool:trace_metallurgy_impact_path] Invoked for entity='{entity}'")
     results = graph_searcher.trace_impact_path(entity)
     if not results:
+        logger.info(f"[Tool:trace_metallurgy_impact_path] No impact paths found starting from: {entity}")
         return f"No impact paths found starting from: {entity}"
         
     formatted = [f"Found {len(results)} impact paths:"]
@@ -268,6 +297,7 @@ def trace_metallurgy_impact_path(entity: str) -> str:
         nodes = " -> ".join(r['nodes'])
         formatted.append(f"Path {idx+1}: {nodes}")
         
+    logger.info(f"[Tool:trace_metallurgy_impact_path] Completed. Found {len(results)} paths.")
     return "\n".join(formatted)
 
 
@@ -331,15 +361,6 @@ def _register_all_tools():
         always_load=True
     ))
 
-    # KG-增强 HyDE 检索 — 延迟加载
-    engine.register(search_metallurgy_kg_enhanced, ToolMetadata(
-        name="search_metallurgy_kg_enhanced",
-        description="基于图谱锚定生成的增强检索 (KG-HyDE)。在查询复杂机理或长尾概念时，会先通过图谱游走获取背景知识，生成高质量伪文档后再进行向量召回，准确率极高。",
-        category="text",
-        search_hint="图谱增强 hyde 检索 复杂查询 机理 kg-hyde",
-        should_defer=True
-    ))
-
     # 图谱单跳查询 — 延迟加载
     engine.register(search_metallurgy_graph_relations, ToolMetadata(
         name="search_metallurgy_graph_relations",
@@ -358,13 +379,14 @@ def _register_all_tools():
         should_defer=True
     ))
 
-    # Python 计算沙盒 — 延迟加载
-    engine.register(execute_metallurgy_python, ToolMetadata(
-        name="execute_metallurgy_python",
-        description="有状态 Python 代码沙盒，支持 Numpy/Scipy/Matplotlib/PyCalphad 进行热力学计算、流体模拟等",
+    # 科学计算与可视化委派工具 — 始终加载，替代 execute_metallurgy_python
+    engine.register(delegate_scientific_visualization, ToolMetadata(
+        name="delegate_scientific_visualization",
+        description="委派后台有状态沙盒计算子智能体执行冶金学计算、相图模拟或 Matplotlib 学术级绘图任务",
         category="calculation",
-        search_hint="计算 数值 公式 方程 动力学 热力学 相图 模拟 代码 python numpy",
-        should_defer=True
+        search_hint="计算 数值 公式 方程 动力学 热力学 相图 模拟 代码 python numpy 绘图 曲线 图像 画图",
+        should_defer=False,
+        always_load=True
     ))
 
     # PDF 区域裁切 — 延迟加载（视觉工具）
@@ -411,12 +433,6 @@ TEXT_TOOLS = [
         name="search_metallurgy_text",
         description="Hybrid Semantic Search (Embedding + BM25) for metallurgy documents. Input natural language queries, full sentences, or abstract concepts, not just keywords.",
         args_schema=SearchTextInput
-    ),
-    StructuredTool.from_function(
-        func=search_metallurgy_kg_enhanced,
-        name="search_metallurgy_kg_enhanced",
-        description="Graph-Enhanced Semantic Search (KG-HyDE). Use this for complex, mechanism-related or long-tail queries. It uses KG traversal to anchor generation before semantic search.",
-        args_schema=SearchTextInput
     )
 ]
 
@@ -437,10 +453,10 @@ GRAPH_TOOLS = [
 
 CALCULATION_TOOLS = [
     StructuredTool.from_function(
-        func=execute_metallurgy_python,
-        name="execute_metallurgy_python",
-        description="Execute Python code in a sandbox for thermodynamics calculation or simulation.",
-        args_schema=PythonCodeInput
+        func=delegate_scientific_visualization,
+        name="delegate_scientific_visualization",
+        description="Delegate metallurgical calculations, simulation, or Matplotlib plotting to a background stateful sandbox subagent.",
+        args_schema=ScientificVisualizationInput
     )
 ]
 

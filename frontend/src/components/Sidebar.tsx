@@ -34,7 +34,9 @@ const STATUS_MAP: Record<string, { color: string; label: string; pulsing?: boole
   figures:  { color: '#f59e0b',               label: '图片处理中', pulsing: true },
   indexing: { color: '#8b5cf6',               label: '向量索引中', pulsing: true },
   graphing: { color: '#8b5cf6',               label: '图谱抽取中', pulsing: true },
+  verifying: { color: '#8b5cf6',               label: '验证一致性中', pulsing: true },
   failed:   { color: 'var(--status-error)',   label: '失败' },
+  verify_failed: { color: '#ef4444',           label: '验证失败', pulsing: false },
 };
 
 const Sidebar: React.FC<Props> = ({
@@ -69,7 +71,7 @@ const Sidebar: React.FC<Props> = ({
   };
 
   // 自动轮询：当有处理中状态的文档时，每 8 秒刷新一次
-  const TERMINAL_STATES = ['ready', 'failed'];
+  const TERMINAL_STATES = ['ready', 'failed', 'verify_failed'];
   const hasInProgress = documents.some(d => !TERMINAL_STATES.includes(d.status));
   useEffect(() => {
     if (!hasInProgress) return;

@@ -14,4 +14,11 @@ P1: Ingestion Pipeline — 数据入库管线
   - figure_extractor.py:  图注提取 (迁移自 src/pipeline/)
   - graph_extractor.py:   知识图谱三元组抽取 (迁移自 src/pipeline/)
   - image_analyzer.py:    VLM 入库分析 (迁移自 src/pipeline/)
+      - ImageEvaluationResult
+      - ImagePreAnalysis (V3)
+      - analyze_metallurgy_image()              [向后兼容]
+      - analyze_metallurgy_image_with_context() [V2]
+      - pre_analyze_image()                     [V3 Stage 1]
+      - analyze_with_focus()                    [V3 Stage 2]
+      - two_stage_analyze()                     [V3 统一入口]
 """

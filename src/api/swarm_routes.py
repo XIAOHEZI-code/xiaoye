@@ -23,9 +23,10 @@ class BBox(BaseModel):
 
 class ForkRequest(BaseModel):
     taskId: str
-    documentId: str
+    documentId: str | None = None
     type: str
-    bbox: BBox
+    bbox: BBox | None = None
+    instruction: str | None = None
 
 async def background_fork_worker(task_req: ForkRequest):
     """
@@ -36,8 +37,9 @@ async def background_fork_worker(task_req: ForkRequest):
     await dispatch_fork_subagent(
         task_id=task_req.taskId,
         task_type=task_req.type,
-        bbox=task_req.bbox.model_dump(),
-        document_id=task_req.documentId
+        bbox=task_req.bbox.model_dump() if task_req.bbox else None,
+        document_id=task_req.documentId,
+        instruction=task_req.instruction
     )
 
 @router.post("/fork_agent")
@@ -46,7 +48,8 @@ async def fork_agent(request: ForkRequest, background_tasks: BackgroundTasks):
     M3 Event Gateway: Accepts long-running task, immediately returns OK.
     The Background task will spin up the `forkSubagent` logic.
     """
-    logger.info(f"Fork Agent Dispatched -> Task: {request.taskId}, Type: {request.type}, BBox: {request.bbox.model_dump()}")
+    bbox_info = request.bbox.model_dump() if request.bbox else None
+    logger.info(f"Fork Agent Dispatched -> Task: {request.taskId}, Type: {request.type}, BBox: {bbox_info}")
     background_tasks.add_task(background_fork_worker, request)
     return {"status": "ok", "message": "Fork deployed to background."}
 

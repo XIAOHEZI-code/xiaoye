@@ -8,10 +8,13 @@ V2 增强（2026-04-26）：
 """
 
 import os
+import logging
 import subprocess
 import glob
 from typing import Tuple, List, Optional
 from src.models.chunk_document import ChunkDocument
+
+logger = logging.getLogger("xiaoye.ingestion.pdf_parser")
 from src.ingestion.figure_extractor import (
     extract_figures_from_markdown,
     FigureInfo,
@@ -26,13 +29,12 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    print(f"Running Marker-PDF CLI for: {filepath}")
+    logger.info(f"Running Marker-PDF CLI for: {filepath}")
 
     # Marker 1.0+ CLI syntax
     import sys
 
     marker_bin = os.path.join(sys.prefix, "bin", "marker_single")
-    cmd = [marker_bin, filepath, "--output_dir", out_dir]
 
     # Marker / Surya VRAM Optimization for ~8GB GPU
     env = os.environ.copy()
@@ -42,13 +44,50 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
     env["TABLE_REC_BATCH_SIZE"] = "2"
     env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    if result.returncode != 0:
-        print("Marker extraction failed:")
-        print(result.stderr)
-        raise RuntimeError(f"Marker failed with return code {result.returncode}")
+    # Keywords that indicate a CUDA out-of-memory failure in stderr
+    _OOM_KEYWORDS = ("out of memory", "oom", "cuda out of memory", "memoryerror")
 
-    print("Marker-PDF extraction completed successfully.")
+    def _invoke_marker(cmd: list, label: str) -> subprocess.CompletedProcess:
+        """Run marker_single and raise on failure, distinguishing OOM errors."""
+        logger.info(f"Marker attempt [{label}]: {' '.join(cmd)}")
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+        if result.returncode == 0:
+            return result
+
+        stderr = (result.stderr or "").lower()
+        is_oom = any(kw in stderr for kw in _OOM_KEYWORDS)
+        if is_oom:
+            raise MemoryError(
+                f"Marker CUDA OOM on [{label}] attempt: {(result.stderr or '')[:500]}"
+            )
+        raise RuntimeError(
+            f"Marker failed on [{label}] attempt "
+            f"(code {result.returncode}): {(result.stderr or '')[:500]}"
+        )
+
+    base_cmd = [marker_bin, filepath, "--output_dir", out_dir, "--output_format", "markdown"]
+    fallback_cmd = [marker_bin, filepath, "--output_dir", out_dir, "--output_format", "markdown", "--disable_ocr"]
+
+    try:
+        _invoke_marker(base_cmd, "primary")
+    except MemoryError as e:
+        logger.warning(
+            f"Marker primary attempt OOM on 8GB GPU, "
+            f"retrying with --disable_ocr (PDF has embedded text): {e}"
+        )
+        try:
+            _invoke_marker(fallback_cmd, "fallback (--disable_ocr)")
+            logger.info("Marker fallback with --disable_ocr succeeded.")
+        except (MemoryError, RuntimeError) as e2:
+            logger.error(f"Marker fallback also failed: {e2}")
+            raise RuntimeError(
+                f"Marker extraction failed after OOM retry: {e2}"
+            ) from e2
+
+    # NOTE: Non-OOM RuntimeError from the primary attempt propagates naturally
+    # to extraction_engine's PyMuPDF fallback handler — no need to catch here.
+
+    logger.info("Marker-PDF extraction completed successfully.")
 
     # Locate generated markdown file and metadata in out_dir/<basename>
     basename = os.path.splitext(os.path.basename(filepath))[0]
@@ -80,41 +119,18 @@ def extract_pdf_with_marker(filepath: str, out_dir: str) -> Tuple[str, List[str]
             out_metadata = json.load(f)
 
     # Gather images
-    images = glob.glob(os.path.join(image_dir, "*.png")) + glob.glob(
-        os.path.join(image_dir, "*.webp")
+    images = (
+        glob.glob(os.path.join(image_dir, "*.png"))
+        + glob.glob(os.path.join(image_dir, "*.webp"))
+        + glob.glob(os.path.join(image_dir, "*.jpg"))
+        + glob.glob(os.path.join(image_dir, "*.jpeg"))
     )
     images = [os.path.abspath(img) for img in images]
 
     return md_text, images, out_metadata
 
 
-def _get_page_from_toc(chunk_text: str, toc_entries: list) -> int:
-    """Find which page a chunk belongs to by matching against TOC section titles.
 
-    Strategy: Find the last TOC entry whose title appears in the chunk text or
-    appears earlier in the markdown, and return its page_id (converted to 1-indexed).
-    """
-    if not toc_entries:
-        return -1
-
-    import re
-
-    clean_chunk = re.sub(r"[#*`\[\]()>_~\\|]", "", chunk_text[:500]).strip()
-
-    best_page = -1
-    best_pos = -1
-
-    for entry in toc_entries:
-        title = entry.get("title", "")
-        page_id = entry.get("page_id", -1)
-        if not title or page_id < 0:
-            continue
-        pos = clean_chunk.find(title)
-        if pos >= 0 and (best_pos < 0 or pos < best_pos):
-            best_pos = pos
-            best_page = page_id + 1  # Convert 0-indexed to 1-indexed
-
-    return best_page
 
 
 def _build_page_map(md_text: str, toc_entries: list) -> list[int]:
@@ -198,8 +214,6 @@ def split_markdown_into_chunk_documents(
 
     chunks = []
 
-    import jieba
-
     # Build page map for accurate page number assignment
     toc_entries = out_metadata.get("table_of_contents", []) if out_metadata else []
     page_map = _build_page_map(md_text, toc_entries)
@@ -239,8 +253,18 @@ def split_markdown_into_chunk_documents(
             # Take overlap: simple string slicing for prototyping
             if chunk_overlap > 0:
                 current_chunk = current_chunk[-chunk_overlap:] + "\n\n" + p
-                # After overlap, the new chunk conceptually starts from this paragraph
+                # Backtrack to find the paragraph where the overlap text actually starts
+                # (the overlap characters come from the tail of the previous chunk)
+                overlap_remaining = chunk_overlap
                 chunk_start_para = para_idx
+                for k in range(para_idx - 1, -1, -1):
+                    para_chars = len(paragraphs[k]) + 2  # +2 for \n\n separator
+                    overlap_remaining -= para_chars
+                    if overlap_remaining <= 0:
+                        chunk_start_para = k
+                        break
+                else:
+                    chunk_start_para = 0  # overlap covers all preceding paragraphs
             else:
                 current_chunk = p
                 chunk_start_para = para_idx
@@ -304,16 +328,16 @@ def process_figures(
 
     if not figures:
         # 降级：如果 Markdown 中没有图片引用，直接用文件列表创建基础 chunk
-        print(
-            f"[process_figures] 未在 Markdown 中找到图片引用，"
+        logger.info(
+            f"未在 Markdown 中找到图片引用，"
             f"使用文件列表 ({len(image_paths)} 张)"
         )
         return _create_basic_image_chunks(image_paths, doc_id, source_pdf_id)
 
     # 2. 过滤出有意义的图表（有图注或关键词的）
     meaningful = [f for f in figures if is_figure_item(f)]
-    print(
-        f"[process_figures] 提取到 {len(figures)} 张图片引用，"
+    logger.info(
+        f"提取到 {len(figures)} 张图片引用，"
         f"其中 {len(meaningful)} 张为有意义图表"
     )
 
@@ -351,8 +375,8 @@ def process_figures(
     referenced_paths = {f.image_path for f in figures}
     unreferenced = [p for p in image_paths if p not in referenced_paths]
     if unreferenced:
-        print(
-            f"[process_figures] 另有 {len(unreferenced)} 张图片未在 Markdown 中找到引用"
+        logger.info(
+            f"另有 {len(unreferenced)} 张图片未在 Markdown 中找到引用"
         )
         result_chunks.extend(
             _create_basic_image_chunks(unreferenced, doc_id, source_pdf_id)
@@ -448,12 +472,12 @@ def _analyze_figures_with_vlm(
                 chunk_type="figure",
             )
             chunks.append(chunk)
-            print(
-                f"  ✓ 已分析: {fig.image_filename} → {result.category}/{result.sub_category}"
+            logger.info(
+                f"已分析: {fig.image_filename} → {result.category}/{result.sub_category}"
             )
 
         except Exception as e:
-            print(f"  ✗ 分析失败: {fig.image_filename}: {e}")
+            logger.error(f"分析失败: {fig.image_filename}: {e}", exc_info=True)
             # 降级：使用图注信息作为描述
             desc = fig.caption if fig.caption else f"图片: {fig.image_filename}"
             chunk = make_image_chunk(
