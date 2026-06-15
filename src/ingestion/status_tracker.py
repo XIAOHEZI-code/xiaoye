@@ -18,6 +18,11 @@ from enum import Enum
 from typing import Optional
 
 
+import logging
+
+logger = logging.getLogger("xiaoye.ingestion.status_tracker")
+
+
 class IngestionStage(str, Enum):
     """入库管线阶段枚举"""
 
@@ -67,4 +72,4 @@ class StatusTracker:
             rc.close()
         except Exception as e:
             # SSE 推送失败不阻断入库流程
-            print(f"[StatusTracker] SSE push failed (non-fatal): {e}")
+            logger.warning(f"SSE push failed (non-fatal): {e}", exc_info=True)

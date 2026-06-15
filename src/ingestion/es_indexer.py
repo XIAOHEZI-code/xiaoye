@@ -1,8 +1,11 @@
 import os
+import logging
 from elasticsearch import Elasticsearch, helpers
 from langchain_openai import OpenAIEmbeddings
 from src.core.config import settings
 from typing import List, Dict
+
+logger = logging.getLogger("xiaoye.ingestion.es_indexer")
 
 
 class ElasticsearchIndexer:
@@ -68,7 +71,7 @@ class ElasticsearchIndexer:
         if not chunks:
             return
 
-        print(f"Generating embeddings for {len(chunks)} chunks...")
+        logger.info(f"Generating embeddings for {len(chunks)} chunks...")
         vectors = self.embeddings.embed_documents(chunks)
 
         actions = []
@@ -86,7 +89,7 @@ class ElasticsearchIndexer:
             }
             actions.append(action)
 
-        print("Bulk indexing into Elasticsearch...")
+        logger.info("Bulk indexing into Elasticsearch...")
         helpers.bulk(self.es, actions)
 
     def index_chunk_documents(self, chunks: List["ChunkDocument"]):
@@ -101,13 +104,13 @@ class ElasticsearchIndexer:
         valid_chunks = [c for c in chunks if c.text_content and c.text_content.strip()]
         skipped = len(chunks) - len(valid_chunks)
         if skipped:
-            print(f"[Indexer] Skipped {skipped} empty chunks")
+            logger.warning(f"Skipped {skipped} empty chunks")
         if not valid_chunks:
-            print("[Indexer] No valid chunks to index")
+            logger.warning("No valid chunks to index")
             return
 
         texts = [c.text_content for c in valid_chunks]
-        print(f"Generating embeddings for {len(texts)} rich chunks...")
+        logger.info(f"Generating embeddings for {len(texts)} rich chunks...")
 
         # 分批处理 embedding（每批最多 10 个，Qwen API 限制）
         BATCH_SIZE = 10
@@ -117,7 +120,7 @@ class ElasticsearchIndexer:
             vectors = self.embeddings.embed_documents(batch)
             all_vectors.extend(vectors)
             if len(texts) > BATCH_SIZE:
-                print(
+                logger.info(
                     f"  Embedded batch {i // BATCH_SIZE + 1}/{(len(texts) - 1) // BATCH_SIZE + 1}"
                 )
 
@@ -133,7 +136,7 @@ class ElasticsearchIndexer:
                 }
             )
 
-        print(f"Bulk indexing {len(actions)} rich chunks into Elasticsearch...")
+        logger.info(f"Bulk indexing {len(actions)} rich chunks into Elasticsearch...")
         helpers.bulk(self.es, actions)
 
     def count_chunks_by_doc(self, doc_id: str) -> int:
